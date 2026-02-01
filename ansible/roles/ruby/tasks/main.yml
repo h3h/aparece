@@ -1,0 +1,84 @@
+---
+- name: Install rbenv dependencies
+  apt:
+    name:
+      - autoconf
+      - bison
+      - libssl-dev
+      - libyaml-dev
+      - libreadline-dev
+      - zlib1g-dev
+      - libncurses5-dev
+      - libffi-dev
+      - libgdbm-dev
+      - rustc
+    state: present
+
+- name: Clone rbenv repository
+  git:
+    repo: https://github.com/rbenv/rbenv.git
+    dest: /usr/local/rbenv
+    version: master
+  register: rbenv_clone
+
+- name: Clone ruby-build plugin
+  git:
+    repo: https://github.com/rbenv/ruby-build.git
+    dest: /usr/local/rbenv/plugins/ruby-build
+    version: master
+
+- name: Set rbenv environment in profile
+  copy:
+    dest: /etc/profile.d/rbenv.sh
+    content: |
+      export RBENV_ROOT="/usr/local/rbenv"
+      export PATH="${RBENV_ROOT}/bin:${PATH}"
+      eval "$(rbenv init -)"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Get latest stable Ruby version
+  shell: |
+    export RBENV_ROOT="/usr/local/rbenv"
+    export PATH="${RBENV_ROOT}/bin:${PATH}"
+    rbenv install -l | grep -E '^\s*[0-9]+\.[0-9]+\.[0-9]+$' | tail -1 | tr -d ' '
+  register: ruby_latest_version
+  changed_when: false
+
+- name: Install latest Ruby version
+  shell: |
+    export RBENV_ROOT="/usr/local/rbenv"
+    export PATH="${RBENV_ROOT}/bin:${PATH}"
+    rbenv install -s {{ ruby_latest_version.stdout }}
+  args:
+    creates: "/usr/local/rbenv/versions/{{ ruby_latest_version.stdout }}"
+
+- name: Set global Ruby version
+  shell: |
+    export RBENV_ROOT="/usr/local/rbenv"
+    export PATH="${RBENV_ROOT}/bin:${PATH}"
+    rbenv global {{ ruby_latest_version.stdout }}
+  changed_when: false
+
+- name: Install bundler
+  shell: |
+    export RBENV_ROOT="/usr/local/rbenv"
+    export PATH="${RBENV_ROOT}/bin:${PATH}"
+    eval "$(rbenv init -)"
+    gem install bundler
+  args:
+    creates: "/usr/local/rbenv/versions/{{ ruby_latest_version.stdout }}/bin/bundler"
+
+- name: Verify Ruby installation
+  shell: |
+    export RBENV_ROOT="/usr/local/rbenv"
+    export PATH="${RBENV_ROOT}/bin:${PATH}"
+    eval "$(rbenv init -)"
+    ruby --version
+  register: ruby_version
+  changed_when: false
+
+- name: Display Ruby version
+  debug:
+    msg: "Ruby installed: {{ ruby_version.stdout }}"

@@ -1,0 +1,43 @@
+# Aparece hardened SSH configuration
+
+# Network
+Port 22
+AddressFamily any
+ListenAddress 0.0.0.0
+ListenAddress ::
+
+# Authentication
+PermitRootLogin no
+PubkeyAuthentication yes
+PasswordAuthentication no
+PermitEmptyPasswords no
+ChallengeResponseAuthentication no
+UsePAM yes
+
+# Kerberos
+KerberosAuthentication no
+GSSAPIAuthentication no
+
+# Security
+X11Forwarding no
+AllowTcpForwarding no
+AllowAgentForwarding no
+PermitTunnel no
+MaxAuthTries 3
+MaxSessions 10
+LoginGraceTime 30
+
+# Logging
+SyslogFacility AUTH
+LogLevel VERBOSE
+
+# Connection
+TCPKeepAlive yes
+ClientAliveInterval 300
+ClientAliveCountMax 2
+
+# Subsystems
+Subsystem sftp /usr/lib/openssh/sftp-server
+
+# Accept locale-related environment variables
+AcceptEnv LANG LC_*

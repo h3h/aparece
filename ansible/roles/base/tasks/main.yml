@@ -1,0 +1,62 @@
+---
+- name: Set timezone to UTC
+  timezone:
+    name: UTC
+
+- name: Configure locale
+  locale_gen:
+    name: en_US.UTF-8
+    state: present
+
+- name: Set default locale
+  copy:
+    dest: /etc/default/locale
+    content: |
+      LANG=en_US.UTF-8
+      LC_ALL=en_US.UTF-8
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Install essential packages
+  apt:
+    name:
+      - curl
+      - wget
+      - git
+      - build-essential
+      - libssl-dev
+      - libffi-dev
+      - zlib1g-dev
+      - libbz2-dev
+      - libreadline-dev
+      - libsqlite3-dev
+      - llvm
+      - libncurses5-dev
+      - libncursesw5-dev
+      - xz-utils
+      - tk-dev
+      - liblzma-dev
+      - ca-certificates
+      - gnupg
+      - lsb-release
+      - software-properties-common
+      - htop
+      - vim
+      - tmux
+      - jq
+      - unzip
+    state: present
+    update_cache: yes
+
+- name: Configure system limits
+  copy:
+    dest: /etc/security/limits.d/99-aparece.conf
+    content: |
+      * soft nofile 65535
+      * hard nofile 65535
+      * soft nproc 65535
+      * hard nproc 65535
+    owner: root
+    group: root
+    mode: '0644'

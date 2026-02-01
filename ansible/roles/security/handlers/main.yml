@@ -1,0 +1,13 @@
+---
+- name: Restart SSH
+  systemd:
+    name: ssh
+    state: restarted
+
+- name: Reload sysctl
+  command: sysctl --system
+
+- name: Restart fail2ban
+  systemd:
+    name: fail2ban
+    state: restarted

@@ -1,0 +1,41 @@
+---
+- name: Get latest DuckDB release version
+  uri:
+    url: https://api.github.com/repos/duckdb/duckdb/releases/latest
+    return_content: yes
+  register: duckdb_release
+
+- name: Set DuckDB version fact
+  set_fact:
+    duckdb_version: "{{ duckdb_release.json.tag_name | regex_replace('^v', '') }}"
+
+- name: Determine system architecture
+  set_fact:
+    duckdb_arch: "{{ 'aarch64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+- name: Download DuckDB CLI
+  get_url:
+    url: "https://github.com/duckdb/duckdb/releases/download/v{{ duckdb_version }}/duckdb_cli-linux-{{ duckdb_arch }}.zip"
+    dest: /tmp/duckdb.zip
+    mode: '0644'
+
+- name: Extract DuckDB CLI
+  unarchive:
+    src: /tmp/duckdb.zip
+    dest: /usr/local/bin
+    remote_src: yes
+    mode: '0755'
+
+- name: Clean up DuckDB download
+  file:
+    path: /tmp/duckdb.zip
+    state: absent
+
+- name: Verify DuckDB installation
+  command: duckdb --version
+  register: duckdb_installed_version
+  changed_when: false
+
+- name: Display DuckDB version
+  debug:
+    msg: "DuckDB installed: {{ duckdb_installed_version.stdout }}"

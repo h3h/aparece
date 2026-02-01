@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Aparece: Cloud Server Bootstrap CLI
+# Bootstraps Ubuntu 24.04 servers with security hardening and development dependencies
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ANSIBLE_DIR="${SCRIPT_DIR}/ansible"
+REMOTE_DIR="/tmp/aparece-ansible"
+
+# Default values
+SSH_USER="${USER}"
+SSH_KEY="${HOME}/.ssh/id_rsa"
+CHECK_MODE=""
+VERBOSE=""
+
+usage() {
+    cat <<EOF
+Usage: $(basename "$0") <host> [options]
+
+Bootstrap an Ubuntu 24.04 cloud server with security hardening and dependencies.
+
+Arguments:
+    <host>              Target host IP or hostname (required)
+
+Options:
+    -u, --user USER     SSH username (default: ${USER})
+    -k, --key PATH      Path to SSH private key (default: ~/.ssh/id_rsa)
+    -c, --check         Run in Ansible check mode (dry run)
+    -v, --verbose       Enable verbose output
+    -h, --help          Show this help message
+
+Examples:
+    $(basename "$0") 192.168.1.100
+    $(basename "$0") myserver.example.com --user admin
+    $(basename "$0") 10.0.0.5 -u ubuntu -k ~/.ssh/cloud_key
+EOF
+    exit "${1:-0}"
+}
+
+log() {
+    echo "[aparece] $*"
+}
+
+error() {
+    echo "[aparece] ERROR: $*" >&2
+    exit 1
+}
+
+# Parse arguments
+if [[ $# -lt 1 ]]; then
+    usage 1
+fi
+
+# First positional argument is the host
+HOST=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -u|--user)
+            SSH_USER="$2"
+            shift 2
+            ;;
+        -k|--key)
+            SSH_KEY="$2"
+            shift 2
+            ;;
+        -c|--check)
+            CHECK_MODE="--check"
+            shift
+            ;;
+        -v|--verbose)
+            VERBOSE="-vvv"
+            shift
+            ;;
+        -h|--help)
+            usage 0
+            ;;
+        -*)
+            error "Unknown option: $1"
+            ;;
+        *)
+            if [[ -z "$HOST" ]]; then
+                HOST="$1"
+            else
+                error "Unexpected argument: $1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Validate required arguments
+if [[ -z "$HOST" ]]; then
+    error "Host is required"
+fi
+
+if [[ ! -d "$ANSIBLE_DIR" ]]; then
+    error "Ansible directory not found: $ANSIBLE_DIR"
+fi
+
+# Build SSH options
+SSH_OPTS="-o StrictHostKeyChecking=accept-new -o BatchMode=yes"
+if [[ -f "$SSH_KEY" ]]; then
+    SSH_OPTS="$SSH_OPTS -i $SSH_KEY"
+fi
+
+SSH_TARGET="${SSH_USER}@${HOST}"
+
+log "Target: ${SSH_TARGET}"
+log "Checking SSH connectivity..."
+
+# Test SSH connection
+if ! ssh $SSH_OPTS "$SSH_TARGET" "echo 'SSH connection successful'" 2>/dev/null; then
+    error "Failed to connect to ${SSH_TARGET}. Check your SSH key and host."
+fi
+
+log "SSH connection verified"
+log "Copying Ansible files to remote host..."
+
+# Copy ansible directory to remote
+rsync -az --delete \
+    -e "ssh $SSH_OPTS" \
+    "${ANSIBLE_DIR}/" \
+    "${SSH_TARGET}:${REMOTE_DIR}/"
+
+log "Installing Ansible on remote host (if needed)..."
+
+# Install Ansible on remote if not present, then run playbook
+ssh $SSH_OPTS "$SSH_TARGET" bash <<REMOTE_SCRIPT
+set -euo pipefail
+
+# Check if ansible is installed
+if ! command -v ansible-playbook &>/dev/null; then
+    echo "[aparece] Installing Ansible..."
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq ansible
+fi
+
+echo "[aparece] Running Ansible playbook..."
+cd "${REMOTE_DIR}"
+
+ansible-playbook \
+    ${VERBOSE} \
+    ${CHECK_MODE} \
+    playbooks/bootstrap.yml
+
+echo "[aparece] Bootstrap complete!"
+REMOTE_SCRIPT
+
+log "Cleaning up remote files..."
+ssh $SSH_OPTS "$SSH_TARGET" "rm -rf ${REMOTE_DIR}"
+
+log "Done! Server has been bootstrapped."

@@ -1,0 +1,66 @@
+---
+- name: Bootstrap Ubuntu 24.04 server
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+
+  pre_tasks:
+    - name: Verify Ubuntu 24.04
+      assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+          - ansible_distribution_version == "24.04"
+        fail_msg: "This playbook is designed for Ubuntu 24.04 only"
+
+    - name: Display target system info
+      debug:
+        msg: |
+          Bootstrapping {{ ansible_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Architecture: {{ ansible_architecture }}
+
+  roles:
+    - role: security
+      tags: [security]
+
+    - role: base
+      tags: [base]
+
+    - role: python
+      tags: [python]
+
+    - role: ruby
+      tags: [ruby]
+
+    - role: duckdb
+      tags: [duckdb]
+
+    - role: postgresql
+      tags: [postgresql]
+
+    - role: redis
+      tags: [redis]
+
+    - role: awscli
+      tags: [awscli]
+
+  post_tasks:
+    - name: Display completion message
+      debug:
+        msg: |
+          Bootstrap complete!
+
+          Installed:
+          - Python 3.12
+          - Ruby (latest via rbenv)
+          - DuckDB
+          - PostgreSQL 17
+          - Redis
+          - AWS CLI v2
+
+          Security hardening applied:
+          - SSH hardened (key-only, no root login)
+          - UFW firewall enabled (SSH only)
+          - fail2ban protecting SSH
+          - Automatic security updates enabled
+          - Kernel security parameters configured

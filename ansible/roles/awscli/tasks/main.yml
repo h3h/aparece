@@ -1,0 +1,44 @@
+---
+- name: Determine system architecture for AWS CLI
+  set_fact:
+    awscli_arch: "{{ 'aarch64' if ansible_architecture == 'aarch64' else 'x86_64' }}"
+
+- name: Download AWS CLI v2 installer
+  get_url:
+    url: "https://awscli.amazonaws.com/awscli-exe-linux-{{ awscli_arch }}.zip"
+    dest: /tmp/awscliv2.zip
+    mode: '0644'
+
+- name: Create AWS CLI extraction directory
+  file:
+    path: /tmp/awscli
+    state: directory
+    mode: '0755'
+
+- name: Extract AWS CLI installer
+  unarchive:
+    src: /tmp/awscliv2.zip
+    dest: /tmp/awscli
+    remote_src: yes
+
+- name: Install AWS CLI v2
+  command: /tmp/awscli/aws/install --update
+  args:
+    creates: /usr/local/bin/aws
+
+- name: Clean up AWS CLI installer
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/awscliv2.zip
+    - /tmp/awscli
+
+- name: Verify AWS CLI installation
+  command: aws --version
+  register: awscli_version
+  changed_when: false
+
+- name: Display AWS CLI version
+  debug:
+    msg: "AWS CLI installed: {{ awscli_version.stdout }}"

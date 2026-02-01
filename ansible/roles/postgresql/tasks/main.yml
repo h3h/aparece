@@ -1,0 +1,59 @@
+---
+- name: Add PostgreSQL APT key
+  apt_key:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    state: present
+
+- name: Add PostgreSQL APT repository
+  apt_repository:
+    repo: "deb http://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main"
+    state: present
+    filename: pgdg
+    update_cache: yes
+
+- name: Install PostgreSQL
+  apt:
+    name:
+      - postgresql
+      - postgresql-contrib
+      - libpq-dev
+    state: present
+
+- name: Ensure PostgreSQL listens on localhost only
+  lineinfile:
+    path: /etc/postgresql/17/main/postgresql.conf
+    regexp: "^#?listen_addresses"
+    line: "listen_addresses = 'localhost'"
+  notify: Restart PostgreSQL
+
+- name: Configure PostgreSQL authentication
+  copy:
+    dest: /etc/postgresql/17/main/pg_hba.conf
+    content: |
+      # PostgreSQL Client Authentication Configuration File
+      # TYPE  DATABASE        USER            ADDRESS                 METHOD
+      local   all             postgres                                peer
+      local   all             all                                     peer
+      host    all             all             127.0.0.1/32            scram-sha-256
+      host    all             all             ::1/128                 scram-sha-256
+    owner: postgres
+    group: postgres
+    mode: '0640'
+  notify: Restart PostgreSQL
+
+- name: Enable and start PostgreSQL
+  systemd:
+    name: postgresql
+    enabled: yes
+    state: started
+
+- name: Verify PostgreSQL installation
+  become: yes
+  become_user: postgres
+  command: psql --version
+  register: postgres_version
+  changed_when: false
+
+- name: Display PostgreSQL version
+  debug:
+    msg: "PostgreSQL installed: {{ postgres_version.stdout }}"

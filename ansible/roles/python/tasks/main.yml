@@ -1,0 +1,44 @@
+---
+- name: Add deadsnakes PPA for latest Python
+  apt_repository:
+    repo: ppa:deadsnakes/ppa
+    state: present
+    update_cache: yes
+
+- name: Install Python 3.12 and related packages
+  apt:
+    name:
+      - python3.12
+      - python3.12-venv
+      - python3.12-dev
+      - python3-pip
+    state: present
+
+- name: Set Python 3.12 as default python3
+  alternatives:
+    name: python3
+    link: /usr/bin/python3
+    path: /usr/bin/python3.12
+    priority: 100
+
+- name: Create python symlink
+  file:
+    src: /usr/bin/python3
+    dest: /usr/bin/python
+    state: link
+    force: yes
+
+- name: Upgrade pip
+  pip:
+    name: pip
+    state: latest
+    executable: pip3
+
+- name: Verify Python installation
+  command: python3 --version
+  register: python_version
+  changed_when: false
+
+- name: Display Python version
+  debug:
+    msg: "Python installed: {{ python_version.stdout }}"

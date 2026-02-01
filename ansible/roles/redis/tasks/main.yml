@@ -1,0 +1,48 @@
+---
+- name: Install Redis server
+  apt:
+    name: redis-server
+    state: present
+
+- name: Configure Redis to bind to localhost only
+  lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: "^bind"
+    line: "bind 127.0.0.1 ::1"
+  notify: Restart Redis
+
+- name: Configure Redis protected mode
+  lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: "^protected-mode"
+    line: "protected-mode yes"
+  notify: Restart Redis
+
+- name: Configure Redis memory limit
+  lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: "^# maxmemory "
+    line: "maxmemory 256mb"
+  notify: Restart Redis
+
+- name: Configure Redis eviction policy
+  lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: "^# maxmemory-policy"
+    line: "maxmemory-policy allkeys-lru"
+  notify: Restart Redis
+
+- name: Enable and start Redis
+  systemd:
+    name: redis-server
+    enabled: yes
+    state: started
+
+- name: Verify Redis installation
+  command: redis-cli ping
+  register: redis_ping
+  changed_when: false
+
+- name: Display Redis status
+  debug:
+    msg: "Redis ping response: {{ redis_ping.stdout }}"
