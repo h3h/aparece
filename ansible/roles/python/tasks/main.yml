@@ -1,44 +1,48 @@
 ---
-- name: Add deadsnakes PPA for latest Python
-  apt_repository:
-    repo: ppa:deadsnakes/ppa
-    state: present
-    update_cache: yes
+- name: Install uv
+  become: yes
+  become_user: "{{ create_user }}"
+  shell: curl -LsSf https://astral.sh/uv/install.sh | sh
+  args:
+    creates: "/home/{{ create_user }}/.local/bin/uv"
+  when: create_user is defined
 
-- name: Install Python 3.12 and related packages
-  apt:
-    name:
-      - python3.12
-      - python3.12-venv
-      - python3.12-dev
-      - python3-pip
-    state: present
+- name: Add uv to system PATH
+  copy:
+    dest: /etc/profile.d/uv.sh
+    content: |
+      export PATH="$HOME/.local/bin:$PATH"
+    owner: root
+    group: root
+    mode: "0644"
 
-- name: Set Python 3.12 as default python3
-  alternatives:
-    name: python3
-    link: /usr/bin/python3
-    path: /usr/bin/python3.12
-    priority: 100
+- name: Install Python 3.12 via uv
+  become: yes
+  become_user: "{{ create_user }}"
+  shell: "/home/{{ create_user }}/.local/bin/uv python install 3.12"
+  args:
+    creates: "/home/{{ create_user }}/.local/share/uv/python"
+  when: create_user is defined
 
-- name: Create python symlink
-  file:
-    src: /usr/bin/python3
-    dest: /usr/bin/python
-    state: link
-    force: yes
+- name: Verify uv installation
+  become: yes
+  become_user: "{{ create_user }}"
+  shell: "/home/{{ create_user }}/.local/bin/uv --version"
+  register: uv_version
+  changed_when: false
+  when: create_user is defined
 
-- name: Upgrade pip
-  pip:
-    name: pip
-    state: latest
-    executable: pip3
-
-- name: Verify Python installation
-  command: python3 --version
+- name: Verify Python installation via uv
+  become: yes
+  become_user: "{{ create_user }}"
+  shell: "/home/{{ create_user }}/.local/bin/uv run --python 3.12 python --version"
   register: python_version
   changed_when: false
+  when: create_user is defined
 
-- name: Display Python version
+- name: Display versions
   debug:
-    msg: "Python installed: {{ python_version.stdout }}"
+    msg: |
+      uv installed: {{ uv_version.stdout }}
+      Python installed: {{ python_version.stdout }}
+  when: create_user is defined

@@ -19,16 +19,21 @@
       - libpq-dev
     state: present
 
+- name: Get PostgreSQL version
+  shell: ls /etc/postgresql/ | head -1
+  register: pg_version
+  changed_when: false
+
 - name: Ensure PostgreSQL listens on localhost only
   lineinfile:
-    path: /etc/postgresql/17/main/postgresql.conf
+    path: "/etc/postgresql/{{ pg_version.stdout }}/main/postgresql.conf"
     regexp: "^#?listen_addresses"
     line: "listen_addresses = 'localhost'"
   notify: Restart PostgreSQL
 
 - name: Configure PostgreSQL authentication
   copy:
-    dest: /etc/postgresql/17/main/pg_hba.conf
+    dest: "/etc/postgresql/{{ pg_version.stdout }}/main/pg_hba.conf"
     content: |
       # PostgreSQL Client Authentication Configuration File
       # TYPE  DATABASE        USER            ADDRESS                 METHOD
@@ -38,7 +43,7 @@
       host    all             all             ::1/128                 scram-sha-256
     owner: postgres
     group: postgres
-    mode: '0640'
+    mode: "0640"
   notify: Restart PostgreSQL
 
 - name: Enable and start PostgreSQL

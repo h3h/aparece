@@ -1,4 +1,56 @@
 ---
+- name: Set hostname
+  hostname:
+    name: "{{ set_hostname }}"
+  when: set_hostname is defined
+
+- name: Update /etc/hosts with hostname
+  lineinfile:
+    path: /etc/hosts
+    regexp: "^127\\.0\\.1\\.1"
+    line: "127.0.1.1 {{ set_hostname }}"
+  when: set_hostname is defined
+
+- name: Create user
+  user:
+    name: "{{ create_user }}"
+    shell: /bin/zsh
+    groups: sudo
+    append: yes
+    create_home: yes
+    state: present
+  when: create_user is defined
+
+- name: Allow user passwordless sudo
+  copy:
+    dest: "/etc/sudoers.d/{{ create_user }}"
+    content: "{{ create_user }} ALL=(ALL) NOPASSWD:ALL"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+  when: create_user is defined
+
+- name: Create .ssh directory for user
+  file:
+    path: "/home/{{ create_user }}/.ssh"
+    state: directory
+    owner: "{{ create_user }}"
+    group: "{{ create_user }}"
+    mode: "0700"
+  when: create_user is defined
+
+- name: Copy authorized_keys to user
+  copy:
+    src: /root/.ssh/authorized_keys
+    dest: "/home/{{ create_user }}/.ssh/authorized_keys"
+    owner: "{{ create_user }}"
+    group: "{{ create_user }}"
+    mode: "0600"
+    remote_src: yes
+  ignore_errors: yes
+  when: create_user is defined
+
 - name: Set timezone to UTC
   timezone:
     name: UTC
@@ -16,7 +68,7 @@
       LC_ALL=en_US.UTF-8
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
 
 - name: Install essential packages
   apt:
@@ -46,8 +98,20 @@
       - tmux
       - jq
       - unzip
+      - zsh
     state: present
     update_cache: yes
+
+- name: Set zsh as default shell for all users
+  replace:
+    path: /etc/default/useradd
+    regexp: "^SHELL=.*"
+    replace: "SHELL=/bin/zsh"
+
+- name: Set zsh as default shell for root
+  user:
+    name: root
+    shell: /bin/zsh
 
 - name: Configure system limits
   copy:
@@ -59,4 +123,4 @@
       * hard nproc 65535
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"

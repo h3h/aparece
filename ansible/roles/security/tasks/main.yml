@@ -16,17 +16,14 @@
       - fail2ban
       - unattended-upgrades
       - apt-listchanges
+      - ubuntu-advantage-tools
     state: present
 
-- name: Configure SSH daemon
-  template:
-    src: sshd_config.j2
-    dest: /etc/ssh/sshd_config
-    owner: root
-    group: root
-    mode: '0644'
-    validate: '/usr/sbin/sshd -t -f %s'
-  notify: Restart SSH
+- name: Enable Ubuntu Pro ESM Apps
+  command: pro enable esm-apps --assume-yes
+  register: esm_result
+  changed_when: "'already enabled' not in esm_result.stdout"
+  failed_when: false
 
 - name: Configure sysctl security parameters
   template:
@@ -34,7 +31,7 @@
     dest: /etc/sysctl.d/99-security.conf
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
   notify: Reload sysctl
 
 - name: Configure UFW defaults
@@ -48,7 +45,7 @@
 - name: Allow SSH through UFW
   ufw:
     rule: allow
-    port: '22'
+    port: "22"
     proto: tcp
 
 - name: Enable UFW
@@ -69,14 +66,14 @@
       findtime = 600
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
   notify: Restart fail2ban
 
 - name: Enable fail2ban service
   systemd:
     name: fail2ban
     enabled: yes
-    state: started
+    state: stopped # TODO: enable after iterating
 
 - name: Configure unattended-upgrades
   copy:
@@ -87,15 +84,4 @@
       APT::Periodic::AutocleanInterval "7";
     owner: root
     group: root
-    mode: '0644'
-
-- name: Disable unnecessary services
-  systemd:
-    name: "{{ item }}"
-    enabled: no
-    state: stopped
-  loop:
-    - cups
-    - avahi-daemon
-    - bluetooth
-  ignore_errors: yes
+    mode: "0644"

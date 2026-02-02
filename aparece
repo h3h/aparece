@@ -9,31 +9,33 @@ ANSIBLE_DIR="${SCRIPT_DIR}/ansible"
 REMOTE_DIR="/tmp/aparece-ansible"
 
 # Default values
-SSH_USER="${USER}"
 SSH_KEY="${HOME}/.ssh/id_rsa"
 CHECK_MODE=""
 VERBOSE=""
+CREATE_USER=""
+SET_HOSTNAME=""
 
 usage() {
     cat <<EOF
-Usage: $(basename "$0") <host> [options]
+Usage: $(basename "$0") [user@]host [options]
 
 Bootstrap an Ubuntu 24.04 cloud server with security hardening and dependencies.
 
 Arguments:
-    <host>              Target host IP or hostname (required)
+    [user@]host         Target in SSH format (required)
 
 Options:
-    -u, --user USER     SSH username (default: ${USER})
-    -k, --key PATH      Path to SSH private key (default: ~/.ssh/id_rsa)
-    -c, --check         Run in Ansible check mode (dry run)
-    -v, --verbose       Enable verbose output
-    -h, --help          Show this help message
+    -k, --key PATH          Path to SSH private key (default: ~/.ssh/id_rsa)
+    --create-user NAME      Create a sudo user with this name
+    --set-hostname NAME     Set the hostname on the remote machine
+    -c, --check             Run in Ansible check mode (dry run)
+    -v, --verbose           Enable verbose output
+    -h, --help              Show this help message
 
 Examples:
-    $(basename "$0") 192.168.1.100
-    $(basename "$0") myserver.example.com --user admin
-    $(basename "$0") 10.0.0.5 -u ubuntu -k ~/.ssh/cloud_key
+    $(basename "$0") root@192.168.1.100
+    $(basename "$0") admin@myserver.example.com --create-user myuser
+    $(basename "$0") ubuntu@10.0.0.5 -k ~/.ssh/cloud_key
 EOF
     exit "${1:-0}"
 }
@@ -52,17 +54,21 @@ if [[ $# -lt 1 ]]; then
     usage 1
 fi
 
-# First positional argument is the host
-HOST=""
+# First positional argument is the target
+SSH_TARGET=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -u|--user)
-            SSH_USER="$2"
-            shift 2
-            ;;
         -k|--key)
             SSH_KEY="$2"
+            shift 2
+            ;;
+        --create-user)
+            CREATE_USER="$2"
+            shift 2
+            ;;
+        --set-hostname)
+            SET_HOSTNAME="$2"
             shift 2
             ;;
         -c|--check)
@@ -80,8 +86,8 @@ while [[ $# -gt 0 ]]; do
             error "Unknown option: $1"
             ;;
         *)
-            if [[ -z "$HOST" ]]; then
-                HOST="$1"
+            if [[ -z "$SSH_TARGET" ]]; then
+                SSH_TARGET="$1"
             else
                 error "Unexpected argument: $1"
             fi
@@ -91,8 +97,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate required arguments
-if [[ -z "$HOST" ]]; then
-    error "Host is required"
+if [[ -z "$SSH_TARGET" ]]; then
+    error "Target is required"
 fi
 
 if [[ ! -d "$ANSIBLE_DIR" ]]; then
@@ -105,9 +111,13 @@ if [[ -f "$SSH_KEY" ]]; then
     SSH_OPTS="$SSH_OPTS -i $SSH_KEY"
 fi
 
-SSH_TARGET="${SSH_USER}@${HOST}"
-
 log "Target: ${SSH_TARGET}"
+if [[ -n "$CREATE_USER" ]]; then
+    log "Will create user: ${CREATE_USER}"
+fi
+if [[ -n "$SET_HOSTNAME" ]]; then
+    log "Will set hostname: ${SET_HOSTNAME}"
+fi
 log "Checking SSH connectivity..."
 
 # Test SSH connection
@@ -126,6 +136,15 @@ rsync -az --delete \
 
 log "Installing Ansible on remote host (if needed)..."
 
+# Build extra vars for ansible
+EXTRA_VARS=""
+if [[ -n "$CREATE_USER" ]]; then
+    EXTRA_VARS="$EXTRA_VARS -e create_user=${CREATE_USER}"
+fi
+if [[ -n "$SET_HOSTNAME" ]]; then
+    EXTRA_VARS="$EXTRA_VARS -e set_hostname=${SET_HOSTNAME}"
+fi
+
 # Install Ansible on remote if not present, then run playbook
 ssh $SSH_OPTS "$SSH_TARGET" bash <<REMOTE_SCRIPT
 set -euo pipefail
@@ -143,6 +162,7 @@ cd "${REMOTE_DIR}"
 ansible-playbook \
     ${VERBOSE} \
     ${CHECK_MODE} \
+    ${EXTRA_VARS} \
     playbooks/bootstrap.yml
 
 echo "[aparece] Bootstrap complete!"

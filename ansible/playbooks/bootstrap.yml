@@ -20,11 +20,11 @@
           Architecture: {{ ansible_architecture }}
 
   roles:
-    - role: security
-      tags: [security]
-
     - role: base
       tags: [base]
+
+    - role: security
+      tags: [security]
 
     - role: python
       tags: [python]
@@ -45,22 +45,24 @@
       tags: [awscli]
 
   post_tasks:
-    - name: Display completion message
-      debug:
-        msg: |
-          Bootstrap complete!
+    # - name: Configure SSH daemon (disables root login)
+    #   template:
+    #     src: security/templates/sshd_config.j2
+    #     dest: /etc/ssh/sshd_config
+    #     owner: root
+    #     group: root
+    #     mode: "0644"
+    #     validate: "/usr/sbin/sshd -t -f %s"
 
-          Installed:
-          - Python 3.12
-          - Ruby (latest via rbenv)
-          - DuckDB
-          - PostgreSQL 17
-          - Redis
-          - AWS CLI v2
+    # - name: Allow SSH login for created user only
+    #   lineinfile:
+    #     path: /etc/ssh/sshd_config
+    #     regexp: "^#?AllowUsers"
+    #     line: "AllowUsers {{ create_user }}"
+    #     validate: "/usr/sbin/sshd -t -f %s"
+    #   when: create_user is defined
 
-          Security hardening applied:
-          - SSH hardened (key-only, no root login)
-          - UFW firewall enabled (SSH only)
-          - fail2ban protecting SSH
-          - Automatic security updates enabled
-          - Kernel security parameters configured
+    # - name: Restart SSH
+    #   systemd:
+    #     name: ssh
+    #     state: restarted

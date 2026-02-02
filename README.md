@@ -6,29 +6,31 @@ ready-to-use configuration.
 ## Usage
 
 ```bash
-./aparece <host> [options]
+./aparece [user@]host [options]
 ```
 
 **Arguments:**
-- `<host>` - Target host IP or hostname (required)
+- `[user@]host` - Target in SSH format (required)
 
 **Options:**
-- `-u, --user USER` - SSH username (default: current user)
 - `-k, --key PATH` - Path to SSH private key (default: `~/.ssh/id_rsa`)
+- `--create-user NAME` - Create a sudo user with this name
+- `--set-hostname NAME` - Set the hostname on the remote machine
 - `-c, --check` - Run in dry-run mode
 - `-v, --verbose` - Enable verbose output
 
 **Examples:**
 ```bash
-./aparece 192.168.1.100
-./aparece myserver.example.com --user admin
-./aparece 10.0.0.5 -u ubuntu -k ~/.ssh/cloud_key
+./aparece root@192.168.1.100
+./aparece admin@myserver.example.com --create-user myuser
+./aparece ubuntu@10.0.0.5 -k ~/.ssh/cloud_key --set-hostname webserver
 ```
 
 ## What Gets Installed
 
 **Development Tools:**
-- Python 3.12 (via deadsnakes PPA)
+- uv (Python package/project manager from Astral)
+- Python 3.12 (managed via uv)
 - Ruby (latest stable via rbenv)
 - DuckDB (latest from GitHub releases)
 - PostgreSQL 17 (localhost only)
