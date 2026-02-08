@@ -1,0 +1,5 @@
+description: "AWS CLI v2"
+ufw_ports: []
+binary_path: "/usr/local/bin/aws"
+service_name: ~
+log_paths: []

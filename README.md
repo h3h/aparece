@@ -1,13 +1,50 @@
 # Aparece
 
 A CLI tool for bootstrapping Ubuntu 24.04 cloud servers into a hardened,
-ready-to-use configuration.
+ready-to-use configuration — then activating applications on demand.
 
-## Usage
+## How It Works
+
+Aparece operates in two phases:
+
+1. **Bootstrap** (from your laptop) — Hardens a fresh server with security
+   defaults and deploys the `aparece` CLI to the remote machine.
+2. **Activate** (on the server) — Installs individual applications on demand,
+   opens their firewall ports, and reports status.
+
+### Bootstrap Phase
 
 ```bash
-./aparece [user@]host [options]
+./aparece bootstrap [user@]host [options]
 ```
+
+This connects via SSH, copies Ansible playbooks to the server, and runs the
+bootstrap playbook which configures:
+
+- Essential packages, locale, timezone
+- SSH hardening (key-only auth, no root login, rate limiting)
+- UFW firewall (SSH only by default)
+- fail2ban protecting SSH from brute force
+- Automatic security updates (unattended-upgrades)
+- Kernel security parameters via sysctl
+
+After bootstrap, the server has the `aparece` CLI at `/usr/local/bin/aparece`
+and all application playbooks at `/opt/aparece/ansible/`.
+
+### Activate Phase
+
+SSH to the server and install applications as needed:
+
+```bash
+aparece list                      # See available apps
+sudo aparece activate postgresql  # Install and activate an app
+sudo aparece status               # Check what's running
+```
+
+Each activation installs the software, opens its firewall ports, and prints a
+summary with the port, binary path, service name, and log locations.
+
+## Bootstrap Options
 
 **Arguments:**
 - `[user@]host` - Target in SSH format (required)
@@ -21,29 +58,22 @@ ready-to-use configuration.
 
 **Examples:**
 ```bash
-./aparece root@192.168.1.100
-./aparece admin@myserver.example.com --create-user myuser
-./aparece ubuntu@10.0.0.5 -k ~/.ssh/cloud_key --set-hostname webserver
+./aparece bootstrap root@192.168.1.100
+./aparece bootstrap admin@myserver.example.com --create-user myuser
+./aparece bootstrap ubuntu@10.0.0.5 -k ~/.ssh/cloud_key --set-hostname webserver
 ```
 
-## What Gets Installed
+## Available Applications
 
-**Development Tools:**
-- uv (Python package/project manager from Astral)
-- Python 3.12 (managed via uv)
-- Ruby (latest stable via rbenv)
-- DuckDB (latest from GitHub releases)
-- PostgreSQL 17 (localhost only)
-- Redis (localhost only)
-- AWS CLI v2
-
-**Security Hardening:**
-- SSH hardened (key-only auth, no root login, rate limiting)
-- UFW firewall enabled (SSH only by default)
-- fail2ban protecting SSH from brute force
-- Automatic security updates (unattended-upgrades)
-- Kernel security parameters via sysctl
-- Unnecessary services disabled
+| App | Description | Port(s) | Service |
+|-----|-------------|---------|---------|
+| python | Python 3.12 via uv | — | — |
+| ruby | Ruby via rbenv | — | — |
+| duckdb | DuckDB CLI | — | — |
+| postgresql | PostgreSQL 17 | 5432 | postgresql |
+| redis | Redis server | 6379 | redis-server |
+| awscli | AWS CLI v2 | — | — |
+| nginx | Nginx web server | 80, 443 | nginx |
 
 ## Requirements
 
@@ -58,46 +88,35 @@ ready-to-use configuration.
 - Your SSH key already authorized
 - Internet connectivity
 
-## How It Works
-
-1. **SSH Connection** - The CLI verifies SSH connectivity to the target host
-2. **File Transfer** - Copies the `ansible/` directory to the remote machine via
-   rsync
-3. **Ansible Installation** - Installs Ansible on the remote host if not already
-   present
-4. **Local Execution** - Runs `ansible-playbook` locally on the target machine
-   (no Ansible required on your machine)
-5. **Cleanup** - Removes the temporary ansible directory from the remote host
-
-This "push-to-pull" approach means you only need bash, SSH, and rsync locally.
-All the heavy lifting happens on the target VM.
-
 ## Project Structure
 
 ```
 aparece/
-├── aparece                     # CLI entry point
+├── aparece                         # Local CLI entry point
+├── templates/
+│   └── aparece-remote.sh           # Remote CLI (deployed to /usr/local/bin/aparece)
 └── ansible/
     ├── ansible.cfg
     ├── inventory/hosts.yml
-    ├── playbooks/bootstrap.yml
+    ├── playbooks/
+    │   ├── bootstrap.yml           # Base + security (runs during bootstrap)
+    │   └── activate.yml            # App activation (runs on server)
+    ├── app_metadata/               # Per-app metadata (ports, paths, services)
+    │   ├── python.yml
+    │   ├── ruby.yml
+    │   ├── duckdb.yml
+    │   ├── postgresql.yml
+    │   ├── redis.yml
+    │   ├── awscli.yml
+    │   └── nginx.yml
     └── roles/
-        ├── security/           # SSH, UFW, fail2ban, sysctl
-        ├── base/               # Essential packages, locale
+        ├── base/                   # Essential packages, locale
+        ├── security/               # SSH, UFW, fail2ban, sysctl
         ├── python/
         ├── ruby/
         ├── duckdb/
         ├── postgresql/
         ├── redis/
-        └── awscli/
-```
-
-## Running Individual Roles
-
-Use Ansible tags to run specific parts:
-
-```bash
-# After SSH'ing to the target and with ansible directory present:
-ansible-playbook playbooks/bootstrap.yml --tags python
-ansible-playbook playbooks/bootstrap.yml --tags security,base
+        ├── awscli/
+        └── nginx/
 ```

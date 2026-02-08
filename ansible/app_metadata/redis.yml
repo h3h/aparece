@@ -1,0 +1,7 @@
+description: "Redis in-memory data store"
+ufw_ports:
+  - { port: "6379", proto: "tcp" }
+binary_path: "/usr/bin/redis-server"
+service_name: "redis-server"
+log_paths:
+  - "/var/log/redis/redis-server.log"

@@ -26,27 +26,6 @@
     - role: security
       tags: [security]
 
-    - role: python
-      tags: [python]
-
-    - role: ruby
-      tags: [ruby]
-
-    - role: duckdb
-      tags: [duckdb]
-
-    - role: postgresql
-      tags: [postgresql]
-
-    - role: redis
-      tags: [redis]
-
-    - role: awscli
-      tags: [awscli]
-
-    - role: nginx
-      tags: [nginx]
-
   post_tasks:
     # - name: Configure SSH daemon (disables root login)
     #   template:

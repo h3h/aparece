@@ -1,0 +1,9 @@
+description: "Nginx web server"
+ufw_ports:
+  - { port: "80", proto: "tcp" }
+  - { port: "443", proto: "tcp" }
+binary_path: "/usr/sbin/nginx"
+service_name: "nginx"
+log_paths:
+  - "/var/log/nginx/access.log"
+  - "/var/log/nginx/error.log"

@@ -1,0 +1,7 @@
+description: "PostgreSQL 17 database server"
+ufw_ports:
+  - { port: "5432", proto: "tcp" }
+binary_path: "/usr/bin/psql"
+service_name: "postgresql"
+log_paths:
+  - "/var/log/postgresql/postgresql-*-main.log"

@@ -1,0 +1,5 @@
+description: "Python 3.12 via uv"
+ufw_ports: []
+binary_path: "$HOME/.local/bin/uv"
+service_name: ~
+log_paths: []

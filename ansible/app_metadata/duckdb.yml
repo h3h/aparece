@@ -1,0 +1,5 @@
+description: "DuckDB CLI"
+ufw_ports: []
+binary_path: "/usr/local/bin/duckdb"
+service_name: ~
+log_paths: []

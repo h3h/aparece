@@ -48,24 +48,6 @@
     port: "22"
     proto: tcp
 
-- name: Allow PostgreSQL through UFW
-  ufw:
-    rule: allow
-    port: "5432"
-    proto: tcp
-
-- name: Allow Redis through UFW
-  ufw:
-    rule: allow
-    port: "6379"
-    proto: tcp
-
-- name: Allow HTTP through UFW
-  ufw:
-    rule: allow
-    port: "80"
-    proto: tcp
-
 - name: Enable UFW
   ufw:
     state: enabled

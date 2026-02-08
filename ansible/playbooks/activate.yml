@@ -1,0 +1,32 @@
+---
+- name: "Activate {{ app_name }}"
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+
+  pre_tasks:
+    - name: Validate app_name is provided
+      assert:
+        that: app_name is defined
+        fail_msg: "app_name must be provided via -e app_name=<name>"
+
+    - name: Load app metadata
+      include_vars:
+        file: "{{ playbook_dir }}/../app_metadata/{{ app_name }}.yml"
+        name: app
+
+    - name: Display activation info
+      debug:
+        msg: "Activating {{ app.description }} ({{ app_name }})"
+
+  roles:
+    - role: "{{ app_name }}"
+
+  post_tasks:
+    - name: "Open UFW ports for {{ app_name }}"
+      ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: "{{ item.proto | default('tcp') }}"
+      loop: "{{ app.ufw_ports | default([]) }}"
+      when: app.ufw_ports | default([]) | length > 0

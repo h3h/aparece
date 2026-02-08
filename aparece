@@ -2,24 +2,40 @@
 set -euo pipefail
 
 # Aparece: Cloud Server Bootstrap CLI
-# Bootstraps Ubuntu 24.04 servers with security hardening and development dependencies
+# Bootstraps Ubuntu 24.04 servers with security hardening,
+# then deploys app activation capabilities for on-demand software installation.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ANSIBLE_DIR="${SCRIPT_DIR}/ansible"
-REMOTE_DIR="/tmp/aparece-ansible"
+REMOTE_DIR="/opt/aparece/ansible"
 
-# Default values
-SSH_KEY="${HOME}/.ssh/id_rsa"
-CHECK_MODE=""
-VERBOSE=""
-CREATE_USER=""
-SET_HOSTNAME=""
+log() {
+    echo "[aparece] $*"
+}
+
+error() {
+    echo "[aparece] ERROR: $*" >&2
+    exit 1
+}
 
 usage() {
     cat <<EOF
-Usage: $(basename "$0") [user@]host [options]
+Usage: $(basename "$0") <command> [args]
 
-Bootstrap an Ubuntu 24.04 cloud server with security hardening and dependencies.
+Commands:
+    bootstrap [user@]host [options]    Bootstrap a fresh Ubuntu 24.04 server
+
+Run '$(basename "$0") bootstrap --help' for bootstrap options.
+EOF
+    exit "${1:-0}"
+}
+
+bootstrap_usage() {
+    cat <<EOF
+Usage: $(basename "$0") bootstrap [user@]host [options]
+
+Bootstrap an Ubuntu 24.04 cloud server with security hardening, then deploy
+app activation capabilities for on-demand software installation.
 
 Arguments:
     [user@]host         Target in SSH format (required)
@@ -33,120 +49,122 @@ Options:
     -h, --help              Show this help message
 
 Examples:
-    $(basename "$0") root@192.168.1.100
-    $(basename "$0") admin@myserver.example.com --create-user myuser
-    $(basename "$0") ubuntu@10.0.0.5 -k ~/.ssh/cloud_key
+    $(basename "$0") bootstrap root@192.168.1.100
+    $(basename "$0") bootstrap admin@myserver.example.com --create-user myuser
+    $(basename "$0") bootstrap ubuntu@10.0.0.5 -k ~/.ssh/cloud_key --set-hostname webserver
 EOF
     exit "${1:-0}"
 }
 
-log() {
-    echo "[aparece] $*"
-}
+cmd_bootstrap() {
+    # Default values
+    local ssh_key="${HOME}/.ssh/id_rsa"
+    local check_mode=""
+    local verbose=""
+    local create_user=""
+    local set_hostname=""
+    local ssh_target=""
 
-error() {
-    echo "[aparece] ERROR: $*" >&2
-    exit 1
-}
+    # Parse arguments
+    if [[ $# -lt 1 ]]; then
+        bootstrap_usage 1
+    fi
 
-# Parse arguments
-if [[ $# -lt 1 ]]; then
-    usage 1
-fi
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -k|--key)
+                ssh_key="$2"
+                shift 2
+                ;;
+            --create-user)
+                create_user="$2"
+                shift 2
+                ;;
+            --set-hostname)
+                set_hostname="$2"
+                shift 2
+                ;;
+            -c|--check)
+                check_mode="--check"
+                shift
+                ;;
+            -v|--verbose)
+                verbose="-vvv"
+                shift
+                ;;
+            -h|--help)
+                bootstrap_usage 0
+                ;;
+            -*)
+                error "Unknown option: $1"
+                ;;
+            *)
+                if [[ -z "$ssh_target" ]]; then
+                    ssh_target="$1"
+                else
+                    error "Unexpected argument: $1"
+                fi
+                shift
+                ;;
+        esac
+    done
 
-# First positional argument is the target
-SSH_TARGET=""
+    # Validate required arguments
+    if [[ -z "$ssh_target" ]]; then
+        error "Target is required"
+    fi
 
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        -k|--key)
-            SSH_KEY="$2"
-            shift 2
-            ;;
-        --create-user)
-            CREATE_USER="$2"
-            shift 2
-            ;;
-        --set-hostname)
-            SET_HOSTNAME="$2"
-            shift 2
-            ;;
-        -c|--check)
-            CHECK_MODE="--check"
-            shift
-            ;;
-        -v|--verbose)
-            VERBOSE="-vvv"
-            shift
-            ;;
-        -h|--help)
-            usage 0
-            ;;
-        -*)
-            error "Unknown option: $1"
-            ;;
-        *)
-            if [[ -z "$SSH_TARGET" ]]; then
-                SSH_TARGET="$1"
-            else
-                error "Unexpected argument: $1"
-            fi
-            shift
-            ;;
-    esac
-done
+    if [[ ! -d "$ANSIBLE_DIR" ]]; then
+        error "Ansible directory not found: $ANSIBLE_DIR"
+    fi
 
-# Validate required arguments
-if [[ -z "$SSH_TARGET" ]]; then
-    error "Target is required"
-fi
+    # Build SSH options
+    local ssh_opts="-o StrictHostKeyChecking=accept-new -o BatchMode=yes"
+    if [[ -f "$ssh_key" ]]; then
+        ssh_opts="$ssh_opts -i $ssh_key"
+    fi
 
-if [[ ! -d "$ANSIBLE_DIR" ]]; then
-    error "Ansible directory not found: $ANSIBLE_DIR"
-fi
+    log "Target: ${ssh_target}"
+    if [[ -n "$create_user" ]]; then
+        log "Will create user: ${create_user}"
+    fi
+    if [[ -n "$set_hostname" ]]; then
+        log "Will set hostname: ${set_hostname}"
+    fi
+    log "Checking SSH connectivity..."
 
-# Build SSH options
-SSH_OPTS="-o StrictHostKeyChecking=accept-new -o BatchMode=yes"
-if [[ -f "$SSH_KEY" ]]; then
-    SSH_OPTS="$SSH_OPTS -i $SSH_KEY"
-fi
+    # Test SSH connection
+    if ! ssh $ssh_opts "$ssh_target" "echo 'SSH connection successful'" 2>/dev/null; then
+        error "Failed to connect to ${ssh_target}. Check your SSH key and host."
+    fi
 
-log "Target: ${SSH_TARGET}"
-if [[ -n "$CREATE_USER" ]]; then
-    log "Will create user: ${CREATE_USER}"
-fi
-if [[ -n "$SET_HOSTNAME" ]]; then
-    log "Will set hostname: ${SET_HOSTNAME}"
-fi
-log "Checking SSH connectivity..."
+    log "SSH connection verified"
+    log "Copying Ansible files to remote host..."
 
-# Test SSH connection
-if ! ssh $SSH_OPTS "$SSH_TARGET" "echo 'SSH connection successful'" 2>/dev/null; then
-    error "Failed to connect to ${SSH_TARGET}. Check your SSH key and host."
-fi
+    # Ensure remote directory exists and copy ansible directory
+    ssh $ssh_opts "$ssh_target" "mkdir -p /opt/aparece"
+    rsync -az --delete \
+        -e "ssh $ssh_opts" \
+        "${ANSIBLE_DIR}/" \
+        "${ssh_target}:${REMOTE_DIR}/"
 
-log "SSH connection verified"
-log "Copying Ansible files to remote host..."
+    log "Installing aparece CLI on remote host..."
+    scp $ssh_opts "${SCRIPT_DIR}/templates/aparece-remote.sh" "${ssh_target}:/usr/local/bin/aparece"
+    ssh $ssh_opts "$ssh_target" "chmod +x /usr/local/bin/aparece"
 
-# Copy ansible directory to remote
-rsync -az --delete \
-    -e "ssh $SSH_OPTS" \
-    "${ANSIBLE_DIR}/" \
-    "${SSH_TARGET}:${REMOTE_DIR}/"
+    log "Installing Ansible on remote host (if needed)..."
 
-log "Installing Ansible on remote host (if needed)..."
+    # Build extra vars for ansible
+    local extra_vars=""
+    if [[ -n "$create_user" ]]; then
+        extra_vars="$extra_vars -e create_user=${create_user}"
+    fi
+    if [[ -n "$set_hostname" ]]; then
+        extra_vars="$extra_vars -e set_hostname=${set_hostname}"
+    fi
 
-# Build extra vars for ansible
-EXTRA_VARS=""
-if [[ -n "$CREATE_USER" ]]; then
-    EXTRA_VARS="$EXTRA_VARS -e create_user=${CREATE_USER}"
-fi
-if [[ -n "$SET_HOSTNAME" ]]; then
-    EXTRA_VARS="$EXTRA_VARS -e set_hostname=${SET_HOSTNAME}"
-fi
-
-# Install Ansible on remote if not present, then run playbook
-ssh $SSH_OPTS "$SSH_TARGET" bash <<REMOTE_SCRIPT
+    # Install Ansible on remote if not present, then run playbook
+    ssh $ssh_opts "$ssh_target" bash <<REMOTE_SCRIPT
 set -euo pipefail
 
 # Check if ansible is installed
@@ -156,19 +174,37 @@ if ! command -v ansible-playbook &>/dev/null; then
     sudo apt-get install -y -qq ansible
 fi
 
-echo "[aparece] Running Ansible playbook..."
+echo "[aparece] Running bootstrap playbook..."
 cd "${REMOTE_DIR}"
 
 ansible-playbook \
-    ${VERBOSE} \
-    ${CHECK_MODE} \
-    ${EXTRA_VARS} \
+    ${verbose} \
+    ${check_mode} \
+    ${extra_vars} \
     playbooks/bootstrap.yml
 
 echo "[aparece] Bootstrap complete!"
 REMOTE_SCRIPT
 
-log "Cleaning up remote files..."
-ssh $SSH_OPTS "$SSH_TARGET" "rm -rf ${REMOTE_DIR}"
+    log "Done! Server bootstrapped and ready."
+    log "SSH in and run 'aparece list' to see available apps."
+    log "Then run 'sudo aparece activate <app>' to install software on demand."
+}
 
-log "Done! Server has been bootstrapped."
+# Main dispatch
+if [[ $# -lt 1 ]]; then
+    usage 1
+fi
+
+case "$1" in
+    bootstrap)
+        shift
+        cmd_bootstrap "$@"
+        ;;
+    -h|--help|help)
+        usage 0
+        ;;
+    *)
+        error "Unknown command: $1. Run '$(basename "$0") --help' for usage."
+        ;;
+esac

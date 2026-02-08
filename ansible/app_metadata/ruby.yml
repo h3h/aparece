@@ -1,0 +1,5 @@
+description: "Ruby via rbenv"
+ufw_ports: []
+binary_path: "/usr/local/rbenv/shims/ruby"
+service_name: ~
+log_paths: []
