@@ -44,6 +44,9 @@
     - role: awscli
       tags: [awscli]
 
+    - role: nginx
+      tags: [nginx]
+
   post_tasks:
     # - name: Configure SSH daemon (disables root login)
     #   template:

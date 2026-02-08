@@ -1,0 +1,62 @@
+---
+- name: Install nginx
+  apt:
+    name: nginx
+    state: present
+
+- name: Create /public directory
+  file:
+    path: /public
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "0755"
+
+- name: Create default index.html
+  copy:
+    dest: /public/index.html
+    content: "<!doctype html>\n<html>\n<body>\n<h1>Hello World!</h1></body></html>\n"
+    owner: www-data
+    group: www-data
+    mode: "0644"
+    force: no
+
+- name: Configure nginx for HTTP/2
+  template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Configure default site
+  template:
+    src: default.conf.j2
+    dest: /etc/nginx/sites-available/default
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Enable default site
+  file:
+    src: /etc/nginx/sites-available/default
+    dest: /etc/nginx/sites-enabled/default
+    state: link
+  notify: Reload nginx
+
+- name: Enable and start nginx
+  systemd:
+    name: nginx
+    enabled: yes
+    state: started
+
+- name: Verify nginx installation
+  command: nginx -v
+  register: nginx_version
+  changed_when: false
+
+- name: Display nginx version
+  debug:
+    msg: "nginx installed: {{ nginx_version.stderr }}"

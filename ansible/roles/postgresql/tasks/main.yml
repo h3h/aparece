@@ -24,11 +24,11 @@
   register: pg_version
   changed_when: false
 
-- name: Ensure PostgreSQL listens on localhost only
+- name: Configure PostgreSQL to listen on all interfaces
   lineinfile:
     path: "/etc/postgresql/{{ pg_version.stdout }}/main/postgresql.conf"
     regexp: "^#?listen_addresses"
-    line: "listen_addresses = 'localhost'"
+    line: "listen_addresses = '*'"
   notify: Restart PostgreSQL
 
 - name: Configure PostgreSQL authentication
@@ -41,6 +41,8 @@
       local   all             all                                     peer
       host    all             all             127.0.0.1/32            scram-sha-256
       host    all             all             ::1/128                 scram-sha-256
+      host    all             all             0.0.0.0/0               scram-sha-256
+      host    all             all             ::/0                    scram-sha-256
     owner: postgres
     group: postgres
     mode: "0640"

@@ -4,18 +4,18 @@
     name: redis-server
     state: present
 
-- name: Configure Redis to bind to localhost only
+- name: Configure Redis to bind to all interfaces
   lineinfile:
     path: /etc/redis/redis.conf
     regexp: "^bind"
-    line: "bind 127.0.0.1 ::1"
+    line: "bind 0.0.0.0 ::"
   notify: Restart Redis
 
-- name: Configure Redis protected mode
+- name: Disable Redis protected mode (firewall handles security)
   lineinfile:
     path: /etc/redis/redis.conf
     regexp: "^protected-mode"
-    line: "protected-mode yes"
+    line: "protected-mode no"
   notify: Restart Redis
 
 - name: Configure Redis memory limit
