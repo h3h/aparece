@@ -104,8 +104,12 @@
   when: redis_acl_user.rc != 0
   no_log: true
 
+- name: Debug redis_password length
+  debug:
+    msg: "redis_password length: {{ redis_password | length }}"
+
 - name: Verify Redis installation
-  command: redis-cli -a "{{ redis_password }}" --no-auth-warning ping
+  shell: redis-cli -a "{{ redis_password }}" --no-auth-warning ping
   register: redis_ping
   changed_when: false
   no_log: true
