@@ -54,33 +54,48 @@
     enabled: yes
     state: started
 
+- name: Create credentials directory
+  file:
+    path: /opt/aparece/credentials
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
 - name: Generate PostgreSQL superuser password
   set_fact:
-    pg_admin_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=24') }}"
+    pg_admin_password: "{{ lookup('password', '/opt/aparece/credentials/pg_admin_password chars=ascii_letters,digits length=24') }}"
 
 - name: Generate PostgreSQL app user password
   set_fact:
-    pg_app_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=24') }}"
+    pg_app_password: "{{ lookup('password', '/opt/aparece/credentials/pg_app_password chars=ascii_letters,digits length=24') }}"
+
+- name: Check if postgres superuser password is set
+  become: yes
+  become_user: postgres
+  command: psql -tAc "SELECT passwd IS NOT NULL FROM pg_shadow WHERE usename = 'postgres';"
+  register: pg_admin_has_password
+  changed_when: false
 
 - name: Set postgres superuser password
   become: yes
   become_user: postgres
   command: psql -c "ALTER USER postgres PASSWORD '{{ pg_admin_password }}';"
-  changed_when: true
+  when: pg_admin_has_password.stdout != 't'
   no_log: true
+
+- name: Check if app user exists
+  become: yes
+  become_user: postgres
+  command: psql -tAc "SELECT 1 FROM pg_roles WHERE rolname = 'app';"
+  register: pg_app_user_exists
+  changed_when: false
 
 - name: Create app user with password
   become: yes
   become_user: postgres
-  command: >
-    psql -c "DO $$ BEGIN
-      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app') THEN
-        CREATE ROLE app WITH LOGIN PASSWORD '{{ pg_app_password }}';
-      ELSE
-        ALTER USER app PASSWORD '{{ pg_app_password }}';
-      END IF;
-    END $$;"
-  changed_when: true
+  command: psql -c "CREATE ROLE app WITH LOGIN PASSWORD '{{ pg_app_password }}';"
+  when: pg_app_user_exists.stdout != '1'
   no_log: true
 
 - name: Verify PostgreSQL installation

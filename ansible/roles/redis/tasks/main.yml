@@ -11,13 +11,21 @@
     line: "bind 0.0.0.0 ::"
   notify: Restart Redis
 
+- name: Create credentials directory
+  file:
+    path: /opt/aparece/credentials
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
 - name: Generate Redis default user password
   set_fact:
-    redis_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=24') }}"
+    redis_password: "{{ lookup('password', '/opt/aparece/credentials/redis_password chars=ascii_letters,digits length=24') }}"
 
 - name: Generate Redis app user password
   set_fact:
-    redis_app_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=24') }}"
+    redis_app_password: "{{ lookup('password', '/opt/aparece/credentials/redis_app_password chars=ascii_letters,digits length=24') }}"
 
 - name: Enable Redis protected mode
   lineinfile:
@@ -57,14 +65,21 @@
 - name: Flush handlers to restart Redis with new config
   meta: flush_handlers
 
+- name: Check if Redis app ACL user exists
+  command: redis-cli -a "{{ redis_password }}" --no-auth-warning ACL GETUSER app
+  register: redis_acl_user
+  changed_when: false
+  failed_when: false
+  no_log: true
+
 - name: Create Redis app ACL user
   command: redis-cli -a "{{ redis_password }}" --no-auth-warning ACL SETUSER app on >"{{ redis_app_password }}" ~* +@all
-  changed_when: true
+  when: redis_acl_user.rc != 0
   no_log: true
 
 - name: Persist Redis ACL to disk
   command: redis-cli -a "{{ redis_password }}" --no-auth-warning CONFIG REWRITE
-  changed_when: true
+  when: redis_acl_user.rc != 0
   no_log: true
 
 - name: Verify Redis installation
