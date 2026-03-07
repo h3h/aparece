@@ -20,12 +20,34 @@
     mode: "0700"
 
 - name: Generate Redis default user password
+  shell: |
+    if [ -f /opt/aparece/credentials/redis_password ]; then
+      cat /opt/aparece/credentials/redis_password
+    else
+      openssl rand -base64 18 | tr -d '/+=' | head -c 24 | tee /opt/aparece/credentials/redis_password
+    fi
+  register: redis_password_result
+  changed_when: false
+  no_log: true
+
+- name: Set redis_password fact
   set_fact:
-    redis_password: "{{ lookup('password', '/opt/aparece/credentials/redis_password chars=ascii_letters,digits length=24') }}"
+    redis_password: "{{ redis_password_result.stdout }}"
 
 - name: Generate Redis app user password
+  shell: |
+    if [ -f /opt/aparece/credentials/redis_app_password ]; then
+      cat /opt/aparece/credentials/redis_app_password
+    else
+      openssl rand -base64 18 | tr -d '/+=' | head -c 24 | tee /opt/aparece/credentials/redis_app_password
+    fi
+  register: redis_app_password_result
+  changed_when: false
+  no_log: true
+
+- name: Set redis_app_password fact
   set_fact:
-    redis_app_password: "{{ lookup('password', '/opt/aparece/credentials/redis_app_password chars=ascii_letters,digits length=24') }}"
+    redis_app_password: "{{ redis_app_password_result.stdout }}"
 
 - name: Enable Redis protected mode
   lineinfile:

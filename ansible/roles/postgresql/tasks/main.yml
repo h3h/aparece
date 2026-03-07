@@ -63,12 +63,34 @@
     mode: "0700"
 
 - name: Generate PostgreSQL superuser password
+  shell: |
+    if [ -f /opt/aparece/credentials/pg_admin_password ]; then
+      cat /opt/aparece/credentials/pg_admin_password
+    else
+      openssl rand -base64 18 | tr -d '/+=' | head -c 24 | tee /opt/aparece/credentials/pg_admin_password
+    fi
+  register: pg_admin_password_result
+  changed_when: false
+  no_log: true
+
+- name: Set pg_admin_password fact
   set_fact:
-    pg_admin_password: "{{ lookup('password', '/opt/aparece/credentials/pg_admin_password chars=ascii_letters,digits length=24') }}"
+    pg_admin_password: "{{ pg_admin_password_result.stdout }}"
 
 - name: Generate PostgreSQL app user password
+  shell: |
+    if [ -f /opt/aparece/credentials/pg_app_password ]; then
+      cat /opt/aparece/credentials/pg_app_password
+    else
+      openssl rand -base64 18 | tr -d '/+=' | head -c 24 | tee /opt/aparece/credentials/pg_app_password
+    fi
+  register: pg_app_password_result
+  changed_when: false
+  no_log: true
+
+- name: Set pg_app_password fact
   set_fact:
-    pg_app_password: "{{ lookup('password', '/opt/aparece/credentials/pg_app_password chars=ascii_letters,digits length=24') }}"
+    pg_app_password: "{{ pg_app_password_result.stdout }}"
 
 - name: Check if postgres superuser password is set
   become: yes
