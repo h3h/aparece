@@ -11,12 +11,28 @@
     line: "bind 0.0.0.0 ::"
   notify: Restart Redis
 
-- name: Disable Redis protected mode (firewall handles security)
+- name: Generate Redis default user password
+  set_fact:
+    redis_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=24') }}"
+
+- name: Generate Redis app user password
+  set_fact:
+    redis_app_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=24') }}"
+
+- name: Enable Redis protected mode
   lineinfile:
     path: /etc/redis/redis.conf
     regexp: "^protected-mode"
-    line: "protected-mode no"
+    line: "protected-mode yes"
   notify: Restart Redis
+
+- name: Configure Redis authentication password
+  lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: "^#? ?requirepass"
+    line: "requirepass {{ redis_password }}"
+  notify: Restart Redis
+  no_log: true
 
 - name: Configure Redis memory limit
   lineinfile:
@@ -38,11 +54,32 @@
     enabled: yes
     state: started
 
+- name: Flush handlers to restart Redis with new config
+  meta: flush_handlers
+
+- name: Create Redis app ACL user
+  command: redis-cli -a "{{ redis_password }}" --no-auth-warning ACL SETUSER app on >"{{ redis_app_password }}" ~* +@all
+  changed_when: true
+  no_log: true
+
+- name: Persist Redis ACL to disk
+  command: redis-cli -a "{{ redis_password }}" --no-auth-warning CONFIG REWRITE
+  changed_when: true
+  no_log: true
+
 - name: Verify Redis installation
-  command: redis-cli ping
+  command: redis-cli -a "{{ redis_password }}" --no-auth-warning ping
   register: redis_ping
   changed_when: false
+  no_log: true
 
 - name: Display Redis status
   debug:
     msg: "Redis ping response: {{ redis_ping.stdout }}"
+
+- name: Display Redis credentials
+  debug:
+    msg:
+      - "Redis credentials:"
+      - "  Default user: default / {{ redis_password }}"
+      - "  App user:     app / {{ redis_app_password }}"

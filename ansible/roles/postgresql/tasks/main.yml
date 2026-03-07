@@ -54,6 +54,35 @@
     enabled: yes
     state: started
 
+- name: Generate PostgreSQL superuser password
+  set_fact:
+    pg_admin_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=24') }}"
+
+- name: Generate PostgreSQL app user password
+  set_fact:
+    pg_app_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=24') }}"
+
+- name: Set postgres superuser password
+  become: yes
+  become_user: postgres
+  command: psql -c "ALTER USER postgres PASSWORD '{{ pg_admin_password }}';"
+  changed_when: true
+  no_log: true
+
+- name: Create app user with password
+  become: yes
+  become_user: postgres
+  command: >
+    psql -c "DO $$ BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app') THEN
+        CREATE ROLE app WITH LOGIN PASSWORD '{{ pg_app_password }}';
+      ELSE
+        ALTER USER app PASSWORD '{{ pg_app_password }}';
+      END IF;
+    END $$;"
+  changed_when: true
+  no_log: true
+
 - name: Verify PostgreSQL installation
   become: yes
   become_user: postgres
@@ -64,3 +93,10 @@
 - name: Display PostgreSQL version
   debug:
     msg: "PostgreSQL installed: {{ postgres_version.stdout }}"
+
+- name: Display PostgreSQL credentials
+  debug:
+    msg:
+      - "PostgreSQL credentials:"
+      - "  Superuser:  postgres / {{ pg_admin_password }}"
+      - "  App user:   app / {{ pg_app_password }}"
