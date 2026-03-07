@@ -59,7 +59,7 @@
 - name: Configure Redis authentication password
   lineinfile:
     path: /etc/redis/redis.conf
-    regexp: "^#? ?requirepass"
+    regexp: "^#?\\s*requirepass"
     line: "requirepass {{ redis_password }}"
   notify: Restart Redis
   no_log: true
@@ -104,12 +104,8 @@
   when: redis_acl_user.rc != 0
   no_log: true
 
-- name: Debug redis_password length
-  debug:
-    msg: "redis_password length: {{ redis_password | length }}"
-
 - name: Verify Redis installation
-  shell: redis-cli -a "{{ redis_password }}" --no-auth-warning ping
+  command: redis-cli -a "{{ redis_password }}" --no-auth-warning ping
   register: redis_ping
   changed_when: false
   no_log: true
