@@ -59,7 +59,7 @@
 - name: Configure Redis authentication password
   lineinfile:
     path: /etc/redis/redis.conf
-    regexp: "^#? ?requirepass"
+    regexp: "^#?\\s*requirepass"
     line: "requirepass {{ redis_password }}"
   notify: Restart Redis
   no_log: true
