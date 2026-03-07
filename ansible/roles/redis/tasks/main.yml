@@ -11,12 +11,58 @@
     line: "bind 0.0.0.0 ::"
   notify: Restart Redis
 
-- name: Disable Redis protected mode (firewall handles security)
+- name: Create credentials directory
+  file:
+    path: /opt/aparece/credentials
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Generate Redis default user password
+  shell: |
+    if [ -f /opt/aparece/credentials/redis_password ]; then
+      cat /opt/aparece/credentials/redis_password
+    else
+      openssl rand -base64 18 | tr -d '/+=' | head -c 24 | tee /opt/aparece/credentials/redis_password
+    fi
+  register: redis_password_result
+  changed_when: false
+  no_log: true
+
+- name: Set redis_password fact
+  set_fact:
+    redis_password: "{{ redis_password_result.stdout }}"
+
+- name: Generate Redis app user password
+  shell: |
+    if [ -f /opt/aparece/credentials/redis_app_password ]; then
+      cat /opt/aparece/credentials/redis_app_password
+    else
+      openssl rand -base64 18 | tr -d '/+=' | head -c 24 | tee /opt/aparece/credentials/redis_app_password
+    fi
+  register: redis_app_password_result
+  changed_when: false
+  no_log: true
+
+- name: Set redis_app_password fact
+  set_fact:
+    redis_app_password: "{{ redis_app_password_result.stdout }}"
+
+- name: Enable Redis protected mode
   lineinfile:
     path: /etc/redis/redis.conf
     regexp: "^protected-mode"
-    line: "protected-mode no"
+    line: "protected-mode yes"
   notify: Restart Redis
+
+- name: Configure Redis authentication password
+  lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: "^#? ?requirepass"
+    line: "requirepass {{ redis_password }}"
+  notify: Restart Redis
+  no_log: true
 
 - name: Configure Redis memory limit
   lineinfile:
@@ -38,11 +84,39 @@
     enabled: yes
     state: started
 
+- name: Flush handlers to restart Redis with new config
+  meta: flush_handlers
+
+- name: Check if Redis app ACL user exists
+  command: redis-cli -a "{{ redis_password }}" --no-auth-warning ACL GETUSER app
+  register: redis_acl_user
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Create Redis app ACL user
+  command: redis-cli -a "{{ redis_password }}" --no-auth-warning ACL SETUSER app on >"{{ redis_app_password }}" ~* +@all
+  when: redis_acl_user.rc != 0
+  no_log: true
+
+- name: Persist Redis ACL to disk
+  command: redis-cli -a "{{ redis_password }}" --no-auth-warning CONFIG REWRITE
+  when: redis_acl_user.rc != 0
+  no_log: true
+
 - name: Verify Redis installation
-  command: redis-cli ping
+  command: redis-cli -a "{{ redis_password }}" --no-auth-warning ping
   register: redis_ping
   changed_when: false
+  no_log: true
 
 - name: Display Redis status
   debug:
     msg: "Redis ping response: {{ redis_ping.stdout }}"
+
+- name: Display Redis credentials
+  debug:
+    msg:
+      - "Redis credentials:"
+      - "  Default user: default / {{ redis_password }}"
+      - "  App user:     app / {{ redis_app_password }}"

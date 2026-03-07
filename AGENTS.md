@@ -20,6 +20,10 @@ Use 'bd' for task tracking
 6. **Verify** - All changes committed AND pushed
 7. **Hand off** - Provide context for next session
 
+## Testing
+
+Ansible roles target Ubuntu 24.04 and cannot be run or tested locally on macOS/Darwin. All verification must happen on an Ubuntu target host via `aparece activate <app>`.
+
 **CRITICAL RULES:**
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
