@@ -1,5 +1,4 @@
-function gcb()
-{
-  git branch | grep '^\*' | cut -c3-
+# git current branch
+function gcb() {
+  git rev-parse --abbrev-ref HEAD
 }
-

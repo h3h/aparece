@@ -1,9 +1,10 @@
+# git push new (branch to origin)
 function gpn() {
-  local branch=`gcb`
-  if [ "$branch" = "master" ]; then
-    echo "You're on master. Try again."
-	exit 1
+  local default=$(gdb)
+  local branch=$(gcb)
+  if [[ "$branch" == "$default" ]]; then
+    echo "You're on $default. Try again."
+    return 1
   fi
-  git push -u origin $branch
+  git push -u origin "$branch"
 }
-
