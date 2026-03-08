@@ -1,5 +1,6 @@
+# git pull main (and switch back to the current branch when done)
 function gpm() {
-  local branch=`gcb`
-  git checkout master && git pull && git checkout $branch
+  local default=$(gdb)
+  local branch=$(gcb)
+  git checkout "$default" && git pull && git checkout "$branch"
 }
-

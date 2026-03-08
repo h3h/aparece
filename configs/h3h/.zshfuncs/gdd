@@ -1,10 +1,11 @@
+# git delete (branch locally) and delete (branch on origin), but only if safely merged
 function gdd() {
-  [[ `gcb` == 'master' ]] && branch=$1 || branch=`gcb`
-  if [[ -z `git branch --no-merged master | grep $branch` ]]; then
+  local default=$(gdb)
+  [[ $(gcb) == "$default" ]] && branch=$1 || branch=$(gcb)
+  if [[ -z $(git branch --no-merged "$default" | grep "$branch") ]]; then
     echo "Deleting branch $branch..."
-    git branch -d $branch && git push origin :$branch
+    git branch -d "$branch" && git push origin :"$branch"
   else
     echo "That branch hasn't been merged yet!"
   fi
 }
-

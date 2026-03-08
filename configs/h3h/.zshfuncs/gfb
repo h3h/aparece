@@ -1,7 +1,8 @@
+# git finish branch: switch back to default, pull changes, delete merged local branch
 function gfb() {
-  git co master && git pull && git fetch --prune && \
-  for b in `git branch --merged main | grep -v main`; do
-    git branch -d $b;
+  local default=$(gdb)
+  git checkout "$default" && git pull && git fetch --prune && \
+  for b in $(git branch --merged "$default" | grep -v "$default"); do
+    git branch -d "$b"
   done
 }
-
