@@ -1,0 +1,5 @@
+function gcb()
+{
+  git branch | grep '^\*' | cut -c3-
+}
+

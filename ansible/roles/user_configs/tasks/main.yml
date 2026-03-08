@@ -1,0 +1,48 @@
+---
+- name: Set config source directory
+  set_fact:
+    config_src: "/opt/aparece/configs/{{ set_username }}"
+
+- name: Find user config directories
+  find:
+    paths: "{{ config_src }}"
+    hidden: yes
+    recurse: yes
+    file_type: directory
+  register: config_dirs
+
+- name: Create config directories in user home
+  file:
+    path: "/home/{{ create_user }}/{{ item.path | relpath(config_src) }}"
+    state: directory
+    owner: "{{ create_user }}"
+    group: "{{ create_user }}"
+    mode: "0755"
+  loop: "{{ config_dirs.files }}"
+  loop_control:
+    label: "{{ item.path | relpath(config_src) }}"
+
+- name: Find user config files
+  find:
+    paths: "{{ config_src }}"
+    hidden: yes
+    recurse: yes
+    file_type: file
+  register: config_files
+
+- name: Deploy config files to user home
+  copy:
+    src: "{{ item.path }}"
+    dest: "/home/{{ create_user }}/{{ item.path | relpath(config_src) }}"
+    owner: "{{ create_user }}"
+    group: "{{ create_user }}"
+    mode: "0644"
+    remote_src: yes
+  loop: "{{ config_files.files }}"
+  loop_control:
+    label: "{{ item.path | relpath(config_src) }}"
+
+- name: Ensure user shell is zsh
+  user:
+    name: "{{ create_user }}"
+    shell: /bin/zsh

@@ -1,0 +1,185 @@
+console_title_template = '{{ .Shell }} in {{ .Folder }}'
+version = 3
+final_space = true
+
+[palette]
+  black = '#262B44'
+  blue = '#4B95E9'
+  gray = '#282A35'
+  green = '#59C9A5'
+  orange = '#F07623'
+  purple = '#9D66FF'
+  red = '#D81E5B'
+  white = '#E0DEF4'
+  magenta = '#E066FF'
+  yellow = '#F3AE35'
+
+[secondary_prompt]
+  template = ' '
+
+[transient_prompt]
+  template = '$ '
+  foreground = 'p:blue'
+  background = 'transparent'
+  foreground_templates = ['{{ if gt .Code 0 }}red{{ end }}', '{{ if eq .Code 0 }}blue{{ end }}']
+
+[[blocks]]
+  type = 'prompt'
+  alignment = 'left'
+  newline = true
+
+  [[blocks.segments]]
+    template = '{{ .UserName }}@{{ .HostName }} '
+    foreground = 'p:magenta'
+    background = 'transparent'
+    type = 'session'
+    style = 'plain'
+
+    [blocks.segments.properties]
+      cache_duration = 'none'
+
+  [[blocks.segments]]
+    template = ' {{ .Path }} '
+    foreground = 'p:green'
+    background = 'transparent'
+    type = 'path'
+    style = 'plain'
+
+    [blocks.segments.properties]
+      cache_duration = 'none'
+      style = 'folder'
+
+  [[blocks.segments]]
+    template = ' {{ .HEAD }} {{ .BranchStatus }}{{ if and (not .Working.Changed) (.Staging.Changed) }} 󰩳 {{ else }}{{ if .Working.Changed }} 󰓒 {{ end }}{{ end }}'
+    foreground = 'p:purple'
+    background = 'transparent'
+    type = 'git'
+    style = 'plain'
+
+    [blocks.segments.properties]
+      branch_ahead_icon = ''
+      branch_behind_icon = ''
+      branch_icon = ''
+      cache_duration = 'none'
+      fetch_status = true
+      fetch_upstream_icon = true
+
+  [[blocks.segments]]
+    template = '  '
+    foreground = 'p:white'
+    background = 'p:yellow'
+    type = 'root'
+    style = 'plain'
+
+    [blocks.segments.properties]
+      cache_duration = 'none'
+
+[[blocks]]
+  type = 'rprompt'
+
+  [[blocks.segments]]
+    template = '⏱ {{ .FormattedMs }}'
+    foreground = 'p:yellow'
+    background = 'transparent'
+    type = 'executiontime'
+    style = 'plain'
+
+    [blocks.segments.properties]
+      cache_duration = 'none'
+      style = 'round'
+      threshold = 5000
+
+  [[blocks.segments]]
+    template = '  '
+    foreground = 'p:red'
+    background = 'transparent'
+    type = 'ruby'
+    style = 'plain'
+
+    [blocks.segments.properties]
+      cache_duration = 'none'
+      display_mode = 'files'
+      fetch_version = false
+
+  [[blocks.segments]]
+    template = ' '
+    foreground = 'p:green'
+    background = 'transparent'
+    type = 'node'
+    style = 'plain'
+
+    [blocks.segments.properties]
+      cache_duration = 'none'
+      display_mode = 'files'
+      fetch_package_manager = false
+      home_enabled = false
+
+  [[blocks.segments]]
+    template = ' '
+    foreground = 'p:blue'
+    background = 'transparent'
+    type = 'go'
+    style = 'plain'
+
+    [blocks.segments.properties]
+      cache_duration = 'none'
+      fetch_version = false
+
+  [[blocks.segments]]
+    template = ' '
+    foreground = 'p:purple'
+    background = 'transparent'
+    type = 'elixir'
+    style = 'plain'
+
+    [blocks.segments.properties]
+      cache_duration = 'none'
+
+  [[blocks.segments]]
+    template = ' '
+    foreground = 'p:orange'
+    background = 'transparent'
+    type = 'rust'
+    style = 'plain'
+
+    [blocks.segments.properties]
+      cache_duration = 'none'
+
+  [[blocks.segments]]
+    template = ' '
+    foreground = 'p:yellow'
+    background = 'transparent'
+    type = 'python'
+    style = 'plain'
+
+    [blocks.segments.properties]
+      cache_duration = 'none'
+      display_mode = 'files'
+      fetch_version = false
+      fetch_virtual_env = false
+
+[[blocks]]
+  type = 'prompt'
+  alignment = 'left'
+  newline = true
+
+  [[blocks.segments]]
+    template = '$'
+    foreground = 'p:blue'
+    type = 'text'
+    style = 'plain'
+    foreground_templates = ['{{ if gt .Code 0 }}p:red{{ end }}', '{{ if eq .Code 0 }}p:blue{{ end }}']
+
+    [blocks.segments.properties]
+      cache_duration = 'none'
+
+[[tooltips]]
+  template = '  {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }} '
+  foreground = 'p:orange'
+  background = 'transparent'
+  type = 'aws'
+  style = 'plain'
+  tips = ['aws']
+
+  [tooltips.properties]
+    display_default = true

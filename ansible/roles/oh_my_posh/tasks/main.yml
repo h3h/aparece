@@ -1,0 +1,29 @@
+---
+- name: Get latest oh-my-posh release version
+  uri:
+    url: https://api.github.com/repos/JanDeDobbeleer/oh-my-posh/releases/latest
+    return_content: yes
+  register: omp_release
+
+- name: Set oh-my-posh version fact
+  set_fact:
+    omp_version: "{{ omp_release.json.tag_name | regex_replace('^v', '') }}"
+
+- name: Determine system architecture
+  set_fact:
+    omp_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+- name: Download oh-my-posh binary
+  get_url:
+    url: "https://github.com/JanDeDobbeleer/oh-my-posh/releases/download/v{{ omp_version }}/posh-linux-{{ omp_arch }}"
+    dest: /usr/local/bin/oh-my-posh
+    mode: '0755'
+
+- name: Verify oh-my-posh installation
+  command: oh-my-posh --version
+  register: omp_installed_version
+  changed_when: false
+
+- name: Display oh-my-posh version
+  debug:
+    msg: "oh-my-posh installed: {{ omp_installed_version.stdout }}"

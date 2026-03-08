@@ -1,0 +1,44 @@
+---
+- name: Get latest zoxide release version
+  uri:
+    url: https://api.github.com/repos/ajeetdsouza/zoxide/releases/latest
+    return_content: yes
+  register: zoxide_release
+
+- name: Set zoxide version fact
+  set_fact:
+    zoxide_version: "{{ zoxide_release.json.tag_name | regex_replace('^v', '') }}"
+
+- name: Determine system architecture
+  set_fact:
+    zoxide_arch: "{{ 'aarch64' if ansible_architecture == 'aarch64' else 'x86_64' }}"
+
+- name: Download zoxide
+  get_url:
+    url: "https://github.com/ajeetdsouza/zoxide/releases/download/v{{ zoxide_version }}/zoxide-{{ zoxide_version }}-{{ zoxide_arch }}-unknown-linux-musl.tar.gz"
+    dest: /tmp/zoxide.tar.gz
+    mode: '0644'
+
+- name: Extract zoxide
+  unarchive:
+    src: /tmp/zoxide.tar.gz
+    dest: /usr/local/bin
+    remote_src: yes
+    mode: '0755'
+    extra_opts:
+      - --wildcards
+      - "zoxide"
+
+- name: Clean up zoxide download
+  file:
+    path: /tmp/zoxide.tar.gz
+    state: absent
+
+- name: Verify zoxide installation
+  command: zoxide --version
+  register: zoxide_installed_version
+  changed_when: false
+
+- name: Display zoxide version
+  debug:
+    msg: "zoxide installed: {{ zoxide_installed_version.stdout }}"

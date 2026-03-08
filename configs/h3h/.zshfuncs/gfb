@@ -1,0 +1,7 @@
+function gfb() {
+  git co master && git pull && git fetch --prune && \
+  for b in `git branch --merged main | grep -v main`; do
+    git branch -d $b;
+  done
+}
+

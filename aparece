@@ -118,6 +118,14 @@ cmd_bootstrap() {
         error "Ansible directory not found: $ANSIBLE_DIR"
     fi
 
+    # Check for matching user configs
+    local configs_dir="${SCRIPT_DIR}/configs"
+    local has_user_configs=""
+    if [[ -n "$create_user" && -d "${configs_dir}/${create_user}" ]]; then
+        has_user_configs="1"
+        log "Will deploy shell configs for: ${create_user}"
+    fi
+
     # Build SSH options
     local ssh_opts="-A -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
     if [[ -f "$ssh_key" ]]; then
@@ -148,6 +156,15 @@ cmd_bootstrap() {
         "${ANSIBLE_DIR}/" \
         "${ssh_target}:${REMOTE_DIR}/"
 
+    if [[ -n "$has_user_configs" ]]; then
+        log "Copying user configs to remote host..."
+        ssh $ssh_opts "$ssh_target" "mkdir -p /opt/aparece/configs/${create_user}"
+        rsync -az --delete \
+            -e "ssh $ssh_opts" \
+            "${configs_dir}/${create_user}/" \
+            "${ssh_target}:/opt/aparece/configs/${create_user}/"
+    fi
+
     log "Installing aparece CLI on remote host..."
     scp $ssh_opts "${SCRIPT_DIR}/templates/aparece-remote.sh" "${ssh_target}:/usr/local/bin/aparece"
     ssh $ssh_opts "$ssh_target" "chmod +x /usr/local/bin/aparece"
@@ -161,6 +178,9 @@ cmd_bootstrap() {
     fi
     if [[ -n "$set_hostname" ]]; then
         extra_vars="$extra_vars -e set_hostname=${set_hostname}"
+    fi
+    if [[ -n "$has_user_configs" ]]; then
+        extra_vars="$extra_vars -e set_username=${create_user}"
     fi
 
     # Install Ansible on remote if not present, then run playbook
