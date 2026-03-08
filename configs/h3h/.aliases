@@ -1,0 +1,83 @@
+# vim: set filetype=zsh
+
+# editors
+export EDITOR=/usr/bin/vim
+export SVN_EDITOR=$EDITOR
+export GIT_EDITOR=$EDITOR
+export BUNDLER_EDITOR=$EDITOR
+
+# shell movement commands
+alias b="cd -"
+alias h="cd ~"
+alias c="clear"
+alias u="cd .."
+alias uu="u;u"
+alias uuu="uu;u"
+alias uuuu="uu;uu"
+alias uuuuu="uuu;uu"
+alias uuuuuu="uuu;uuu"
+
+# editing & loading shell configs
+alias erp="$EDITOR ~/.zshrc"
+alias erc=erp
+alias urp="source ~/.zshrc"
+alias urc=urp
+alias ea="$EDITOR ~/.aliases"
+
+# system commands
+alias ll="ls -l --color=auto"
+alias lal="ll -a"
+alias l="ll"
+alias p='ps -ef | grep -v grep | grep '
+alias ss="sudo -s"
+
+# pretty ls colors
+if [[ -f $HOME/.ls_colors ]]; then
+	source $HOME/.ls_colors
+fi
+
+# commands with default options
+alias grep="grep --color"
+alias tree="tree --charset ascii -a -I .git"
+
+alias be="bundle exec"
+
+# awesome git prompt
+export GIT_PS1_SHOWDIRTYSTATE=1
+export GIT_PS1_SHOWSTASHSTATE=1
+export GIT_PS1_SHOWUPSTREAM="auto"
+
+# git shortcut commands
+alias ga="git add"
+alias gaa="git add ."
+alias gbr="git branch $@"
+alias gcl="git clean | grep -v 'Not removing'"
+alias gco="git co"
+alias gdi="git diff --color"
+alias gdic="git diff --cached"
+alias gf="git fetch"
+alias gfp="git fetch --prune"
+alias gg="git commit -v"
+alias gk="gitk --all &"
+alias gp="git pull"
+alias gpu="git push"
+alias gpp="gp && gpu"
+alias grc="git rebase --continue"
+alias gsa="git stash pop"
+alias gsh="git stash --include-untracked"
+alias gsl="git stash list"
+alias gsp="git stash && git pull && git stash pop"
+alias gspp="git stash && git pull && git push && git stash pop"
+alias gst="git status -s"
+
+autoload gbp
+autoload gcb
+autoload gdd
+autoload gfb
+autoload gpm
+autoload gpn
+autoload gpu
+
+# preventative measures
+alias x="echo 'Wrong key!'"
+alias gs="echo 'Wrong key!'"

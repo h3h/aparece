@@ -26,6 +26,19 @@
     - role: security
       tags: [security]
 
+    - role: oh_my_posh
+      tags: [oh_my_posh]
+
+    - role: zoxide
+      tags: [zoxide]
+
+    - role: direnv
+      tags: [direnv]
+
+    - role: user_configs
+      tags: [user_configs]
+      when: set_username is defined
+
   post_tasks:
     # - name: Configure SSH daemon (disables root login)
     #   template:

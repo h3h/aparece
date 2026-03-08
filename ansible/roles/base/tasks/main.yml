@@ -113,6 +113,15 @@
     name: root
     shell: /bin/zsh
 
+- name: Ensure zsh sources /etc/profile for profile.d scripts
+  copy:
+    dest: /etc/zsh/zprofile
+    content: |
+      emulate sh -c 'source /etc/profile'
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Configure system limits
   copy:
     dest: /etc/security/limits.d/99-aparece.conf

@@ -1,0 +1,10 @@
+function gdd() {
+  [[ `gcb` == 'master' ]] && branch=$1 || branch=`gcb`
+  if [[ -z `git branch --no-merged master | grep $branch` ]]; then
+    echo "Deleting branch $branch..."
+    git branch -d $branch && git push origin :$branch
+  else
+    echo "That branch hasn't been merged yet!"
+  fi
+}
+

@@ -1,0 +1,9 @@
+function gpn() {
+  local branch=`gcb`
+  if [ "$branch" = "master" ]; then
+    echo "You're on master. Try again."
+	exit 1
+  fi
+  git push -u origin $branch
+}
+

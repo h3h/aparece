@@ -1,0 +1,5 @@
+# ls colors for Linux (GNU coreutils)
+export LS_COLORS="di=35:ln=36:so=35:pi=35:ex=32:bd=1;33:cd=1;36:su=1;32:sg=1;32:tw=1;35:ow=1;35"
+
+alias ll="ls -l --color=auto"
+alias lal="ls -al --color=auto"

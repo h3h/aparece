@@ -1,0 +1,5 @@
+function gpm() {
+  local branch=`gcb`
+  git checkout master && git pull && git checkout $branch
+}
+

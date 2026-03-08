@@ -1,0 +1,29 @@
+---
+- name: Get latest direnv release version
+  uri:
+    url: https://api.github.com/repos/direnv/direnv/releases/latest
+    return_content: yes
+  register: direnv_release
+
+- name: Set direnv version fact
+  set_fact:
+    direnv_version: "{{ direnv_release.json.tag_name | regex_replace('^v', '') }}"
+
+- name: Determine system architecture
+  set_fact:
+    direnv_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+- name: Download direnv binary
+  get_url:
+    url: "https://github.com/direnv/direnv/releases/download/v{{ direnv_version }}/direnv.linux-{{ direnv_arch }}"
+    dest: /usr/local/bin/direnv
+    mode: '0755'
+
+- name: Verify direnv installation
+  command: direnv version
+  register: direnv_installed_version
+  changed_when: false
+
+- name: Display direnv version
+  debug:
+    msg: "direnv installed: {{ direnv_installed_version.stdout }}"
