@@ -4,10 +4,21 @@
     update_cache: yes
     cache_valid_time: 3600
 
+- name: Check for available package upgrades
+  command: apt-get -s dist-upgrade
+  register: upgrade_dry_run
+  changed_when: false
+
 - name: Upgrade all packages
   apt:
     upgrade: dist
     autoremove: yes
+  when: "'0 upgraded, 0 newly installed, 0 to remove' not in upgrade_dry_run.stdout"
+
+- name: Check if reboot is required after kernel upgrade
+  stat:
+    path: /var/run/reboot-required
+  register: reboot_required_file
 
 - name: Install security packages
   apt:
@@ -19,11 +30,20 @@
       - ubuntu-advantage-tools
     state: present
 
+- name: Check Ubuntu Pro attachment status
+  command: pro status --format json
+  register: pro_status_raw
+  changed_when: false
+  failed_when: false
+
 - name: Enable Ubuntu Pro ESM Apps
   command: pro enable esm-apps --assume-yes
   register: esm_result
   changed_when: "'already enabled' not in esm_result.stdout"
   failed_when: false
+  when:
+    - pro_status_raw.rc == 0
+    - (pro_status_raw.stdout | default('{}') | from_json).attached | default(false)
 
 - name: Configure sysctl security parameters
   template:
@@ -85,3 +105,27 @@
     owner: root
     group: root
     mode: "0644"
+
+# CVE-2026-31431 (Copy Fail): local privilege escalation via algif_aead
+- name: Blacklist algif_aead kernel module (CVE-2026-31431)
+  copy:
+    dest: /etc/modprobe.d/disable-algif_aead.conf
+    content: "install algif_aead /bin/false\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Unload algif_aead kernel module if currently loaded (CVE-2026-31431)
+  command: rmmod algif_aead
+  register: rmmod_result
+  changed_when: rmmod_result.rc == 0
+  failed_when:
+    - rmmod_result.rc != 0
+    - "'not currently loaded' not in rmmod_result.stderr"
+    - "'No such module' not in rmmod_result.stderr"
+
+- name: Reboot to activate updated kernel
+  command: reboot
+  async: 1
+  poll: 0
+  when: reboot_required_file.stat.exists
