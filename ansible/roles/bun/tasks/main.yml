@@ -1,0 +1,52 @@
+---
+- name: Get latest Bun release version
+  uri:
+    url: https://api.github.com/repos/oven-sh/bun/releases/latest
+    return_content: yes
+  register: bun_release
+
+- name: Set Bun version fact
+  set_fact:
+    bun_version: "{{ bun_release.json.tag_name | regex_replace('^bun-v', '') }}"
+
+- name: Determine system architecture
+  set_fact:
+    bun_arch: "{{ 'aarch64' if ansible_architecture == 'aarch64' else 'x64' }}"
+
+- name: Download Bun
+  get_url:
+    url: "https://github.com/oven-sh/bun/releases/download/bun-v{{ bun_version }}/bun-linux-{{ bun_arch }}.zip"
+    dest: /tmp/bun.zip
+    mode: '0644'
+
+- name: Extract Bun binary
+  unarchive:
+    src: /tmp/bun.zip
+    dest: /tmp
+    remote_src: yes
+
+- name: Install Bun to system PATH
+  copy:
+    src: "/tmp/bun-linux-{{ bun_arch }}/bun"
+    dest: /usr/local/bin/bun
+    remote_src: yes
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Clean up Bun download
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/bun.zip
+    - "/tmp/bun-linux-{{ bun_arch }}"
+
+- name: Verify Bun installation
+  command: bun --version
+  register: bun_installed_version
+  changed_when: false
+
+- name: Display Bun version
+  debug:
+    msg: "Bun installed: {{ bun_installed_version.stdout }}"
