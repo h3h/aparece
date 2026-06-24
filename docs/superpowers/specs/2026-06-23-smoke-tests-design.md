@@ -105,7 +105,12 @@ Failure: connection refused or timeout. Verifies the process is listening on the
 PGPASSWORD="__wrong__" psql -h 127.0.0.1 -U postgres -d postgres \
     --connect-timeout=5 -c "SELECT 1" 2>&1
 ```
-Failure if exit code is 0 (connection accepted without valid credentials), or if the error does not indicate an auth rejection (distinguishes "auth failed" from "connection refused").
+Three distinct outcomes, each handled explicitly:
+- Exit 0 → connection accepted without valid credentials → `[FAIL] Accepted unauthenticated connection`
+- Exit non-zero + output contains `password authentication failed` → auth is enforced → `[PASS]`
+- Exit non-zero + output does not contain `password authentication failed` → unexpected error (misconfiguration, wrong port, etc.) → `[FAIL] Unexpected error: <output>`
+
+The third case surfaces configuration problems (e.g. `FATAL: role "postgres" does not exist`) that would otherwise look like a passing test.
 
 **Check 3 — No version in error response:**
 Grep the auth-failure output from Check 2 for a version string:
@@ -125,7 +130,12 @@ nc -z -w5 127.0.0.1 6379
 ```bash
 redis-cli -h 127.0.0.1 PING 2>&1
 ```
-Failure if response is `PONG` or does not contain `NOAUTH`. Redis with `requirepass` set must reject unauthenticated commands.
+Three distinct outcomes:
+- Response is `PONG` → auth not enforced → `[FAIL] Accepted unauthenticated connection`
+- Response contains `NOAUTH` → auth is enforced → `[PASS]`
+- Any other response → unexpected → `[FAIL] Unexpected response: <output>`
+
+Mirrors the PostgreSQL Check 2 logic: an unexpected non-rejection is as much a failure as silent acceptance.
 
 **Check 3 — No version in error response:**
 Grep the `NOAUTH` response for a semver pattern:
