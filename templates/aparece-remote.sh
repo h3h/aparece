@@ -11,6 +11,7 @@ Usage: aparece <command> [args]
 
 Commands:
     activate <app>    Install and activate an application
+    test     <app>    Run smoke tests for an application
     list              List available applications
     status  [app]     Show status of applications
 
@@ -73,6 +74,35 @@ cmd_list() {
     done
 }
 
+cmd_test() {
+    local app="$1"
+    validate_app "$app"
+
+    local test_script="${ANSIBLE_DIR}/tests/${app}.sh"
+
+    if [[ ! -f "$test_script" ]]; then
+        log "No smoke tests defined for ${app} — skipping"
+        return 0
+    fi
+
+    log "Running smoke tests for ${app}..."
+    echo ""
+
+    if bash "$test_script"; then
+        echo ""
+        log "All smoke tests passed for ${app}."
+        return 0
+    else
+        local service
+        service="$(parse_meta "${METADATA_DIR}/${app}.yml" service_name)"
+        if [[ -n "$service" ]]; then
+            log "Stopping ${service} due to failed smoke tests..."
+            systemctl stop "$service"
+        fi
+        error "Smoke tests failed for ${app}. Service has been stopped."
+    fi
+}
+
 cmd_activate() {
     local app="$1"
     validate_app "$app"
@@ -103,6 +133,8 @@ cmd_activate() {
     [[ -n "$service" ]] && echo "  Service: ${service} (systemctl status ${service})"
     [[ -n "$logs" ]]    && echo "  Logs:    ${logs}"
     echo ""
+
+    cmd_test "$app"
 }
 
 cmd_status() {
@@ -149,6 +181,10 @@ case "$1" in
     activate)
         [[ $# -lt 2 ]] && error "Usage: aparece activate <app>"
         cmd_activate "$2"
+        ;;
+    test)
+        [[ $# -lt 2 ]] && error "Usage: aparece test <app>"
+        cmd_test "$2"
         ;;
     list)
         cmd_list
