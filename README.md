@@ -74,6 +74,7 @@ summary with the port, binary path, service name, and log locations.
 | redis | Redis server | 6379 | redis-server |
 | awscli | AWS CLI v2 | — | — |
 | nginx | Nginx web server | 80, 443 | nginx |
+| tmux | tmux terminal multiplexer | — | — |
 
 ## Requirements
 
@@ -108,7 +109,8 @@ aparece/
     │   ├── postgresql.yml
     │   ├── redis.yml
     │   ├── awscli.yml
-    │   └── nginx.yml
+    │   ├── nginx.yml
+    │   └── tmux.yml
     └── roles/
         ├── base/                   # Essential packages, locale
         ├── security/               # SSH, UFW, fail2ban, sysctl
@@ -118,5 +120,6 @@ aparece/
         ├── postgresql/
         ├── redis/
         ├── awscli/
-        └── nginx/
+        ├── nginx/
+        └── tmux/
 ```
