@@ -1,0 +1,5 @@
+description: "Headless Chromium (Google Chrome stable) for browser automation"
+ufw_ports: []
+binary_path: "/usr/bin/google-chrome-stable"
+service_name: ~
+log_paths: []

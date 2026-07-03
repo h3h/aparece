@@ -1,0 +1,31 @@
+---
+- name: Assert supported architecture for Google Chrome
+  assert:
+    that: ansible_architecture == "x86_64"
+    fail_msg: "Google Chrome is only published for x86_64; this host is {{ ansible_architecture }}."
+
+- name: Add Google Chrome APT key
+  apt_key:
+    url: https://dl.google.com/linux/linux_signing_key.pub
+    state: present
+
+- name: Add Google Chrome APT repository
+  apt_repository:
+    repo: "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main"
+    state: present
+    filename: google-chrome
+    update_cache: yes
+
+- name: Install Google Chrome (headless-capable Chromium)
+  apt:
+    name: google-chrome-stable
+    state: present
+
+- name: Verify Chrome installation
+  command: google-chrome-stable --version
+  register: chrome_installed_version
+  changed_when: false
+
+- name: Display Chrome version
+  debug:
+    msg: "Headless Chromium installed: {{ chrome_installed_version.stdout }}"

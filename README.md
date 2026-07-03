@@ -75,6 +75,7 @@ summary with the port, binary path, service name, and log locations.
 | awscli | AWS CLI v2 | — | — |
 | nginx | Nginx web server | 80, 443 | nginx |
 | tmux | tmux terminal multiplexer | — | — |
+| chromium | Headless Chromium (Google Chrome stable) | — | — |
 
 ## Requirements
 
@@ -110,7 +111,8 @@ aparece/
     │   ├── redis.yml
     │   ├── awscli.yml
     │   ├── nginx.yml
-    │   └── tmux.yml
+    │   ├── tmux.yml
+    │   └── chromium.yml
     └── roles/
         ├── base/                   # Essential packages, locale
         ├── security/               # SSH, UFW, fail2ban, sysctl
@@ -121,5 +123,6 @@ aparece/
         ├── redis/
         ├── awscli/
         ├── nginx/
-        └── tmux/
+        ├── tmux/
+        └── chromium/
 ```
