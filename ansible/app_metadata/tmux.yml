@@ -1,0 +1,5 @@
+description: "tmux terminal multiplexer"
+ufw_ports: []
+binary_path: "/usr/bin/tmux"
+service_name: ~
+log_paths: []

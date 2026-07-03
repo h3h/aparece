@@ -1,0 +1,15 @@
+---
+- name: Install tmux
+  apt:
+    name: tmux
+    state: present
+    update_cache: yes
+
+- name: Verify tmux installation
+  command: tmux -V
+  register: tmux_installed_version
+  changed_when: false
+
+- name: Display tmux version
+  debug:
+    msg: "tmux installed: {{ tmux_installed_version.stdout }}"
