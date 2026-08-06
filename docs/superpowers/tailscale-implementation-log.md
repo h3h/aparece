@@ -243,3 +243,22 @@ unsigned and will show as unverified.** To re-sign after unlocking 1Password:
     git rebase --exec 'git commit --amend --no-edit -S' main
 
 No other action was blocked by this.
+
+**Push also blocked.** `git push` fails with:
+
+    sign_and_send_pubkey: signing failed for RSA ".ssh/id_rsa" from agent:
+    communication with agent failed
+    git@github.com: Permission denied (publickey).
+
+Same root cause: the 1Password SSH agent is locked, so it can sign neither
+commits nor the SSH transport handshake. Both need an interactive unlock, which
+the standing instruction rules out.
+
+**Work is committed locally on branch `h3h/tailscale` and is NOT pushed.** This
+deviates from the `AGENTS.md` rule that work is not complete until `git push`
+succeeds — the instruction not to interrupt for anything requiring a key takes
+precedence here. After unlocking 1Password:
+
+    git push -u origin h3h/tailscale
+
+(Optionally re-sign first; see the signing note above.)
