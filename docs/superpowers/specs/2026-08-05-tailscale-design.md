@@ -148,8 +148,14 @@ Add an optional `notes` field to the metadata contract, printed at the end of `c
 
 ```bash
 notes="$(parse_meta "$meta" notes)"
-[[ -n "$notes" ]] && { echo ""; echo "$notes"; }
+...
+if [[ -n "$notes" ]]; then
+    echo ""
+    echo "$notes"
+fi
 ```
+
+**An `if` block is required here — the obvious `[[ -n "$notes" ]] && { ...; }` one-liner is a bug.** Under `set -euo pipefail`, when `notes` is empty the failing `[[ ]]` is the left operand of `&&`, so `set -e` does not fire, but the compound list's exit status is 1 and becomes the function's return value. The call site `cmd_activate "$2"` inside the `case` is an unprotected simple command, so `set -e` then fires and the script exits 1 — for every app without a `notes` field, which is all ten existing ones. An `if` with a false condition and no `else` exits 0, so no trailing `true` guard is needed.
 
 Placed **after** the `cmd_test "$app"` call so the instruction is the last thing on screen rather than being scrolled away by test output. On smoke-test failure `cmd_test` exits non-zero and the notes never print, which is correct — a broken install has no next step to offer.
 
@@ -180,7 +186,7 @@ systemctl is-active --quiet tailscaled
 ```bash
 tailscale status --json 2>&1
 ```
-Output is captured regardless of exit code, because `tailscale status` exits non-zero when the node is logged out. The output is parsed with `python3 -c` (already a dependency of `parse_meta`) and the test passes if `BackendState` is present and non-empty — proving the CLI reached the daemon over its socket. A parse failure or missing field is `[FAIL] Cannot read daemon state`.
+Output is captured regardless of exit code. Note that with `--json` the CLI prints status and returns **0** even when logged out — the `--json` branch of `runStatus` returns before the check that would exit non-zero — so `NeedsLogin` arrives here as ordinary JSON. It exits non-zero only when the daemon socket is unreachable, which is precisely the failure this check exists to catch. The output is parsed with `python3 -c` (already a dependency of `parse_meta`) and the test passes if `BackendState` is present and non-empty — proving the CLI reached the daemon over its socket. A parse failure or missing field is `[FAIL] Cannot read daemon state`.
 
 **Connection state — reported, not graded:**
 
@@ -233,8 +239,12 @@ Every condition must hold. On failure the helper prints one line explaining why 
 4. **`BackendState` is `Running`** — from `tailscale status --json`
 5. **The current session arrived over the tailnet**, determined by walking process ancestry from `$$` to PID 1 via `/proc/<pid>/stat` and comparing each ancestor's `comm`:
    - ancestry contains `tailscaled` → Tailscale SSH session → pass
-   - ancestry contains `sshd` **and** `SSH_CONNECTION`'s source address is in `100.64.0.0/10` → sshd-over-tailnet → pass, with a printed warning that Tailscale SSH itself remains unproven
+   - ancestry contains `sshd` (or `sshd-session`, the OpenSSH ≥ 9.8 name) **and both ends of `SSH_CONNECTION` are tailnet addresses** → sshd-over-tailnet → pass, with a printed warning that Tailscale SSH itself remains unproven
    - otherwise → refuse, explaining that closing port 22 would cut the current connection
+
+   A tailnet address is `100.64.0.0/10` (IPv4 CGNAT space) or `fd7a:115c:a1e0::/48` (Tailscale's IPv6 ULA range).
+
+   **Both ends must match, not just the client source.** `100.64.0.0/10` is shared CGNAT space, so a client behind carrier-grade NAT can present a source address in that range while connecting to the host's *public* address. Checking the source alone would pass that session and then cut it. Requiring `SSH_CONNECTION` field 3 — the local address the client reached — to also be a tailnet address proves the connection terminated on the `tailscale0` interface, which is the property that actually makes closing the public port safe.
 
 Condition 5 is the substance of the verification. A status check can only report what the daemon believes; the session's own provenance is proof that the path being preserved actually carries traffic. Because the operator is connected through a path that survives the change, accepting the prompt cannot disconnect them.
 
