@@ -1,19 +1,30 @@
-# Tailscale App
+# Tailscale App and SSH Lockdown
 
 **Date:** 2026-08-05
-**Scope:** Tailscale as an activatable app, plus an optional `notes` field in app metadata
+**Scope:** Tailscale as an activatable app, an optional `notes` field in app metadata, and a gated lockdown that closes public SSH once tailnet access is proven
 
 ## Summary
 
-Add `tailscale` to the app catalog so a bootstrapped server can join a tailnet and be reached by MagicDNS name instead of a public IP. Activation installs the package, enables `tailscaled`, and opens UDP 41641 — but deliberately stops short of authenticating. The operator finishes setup by running `sudo tailscale up` themselves.
+Add `tailscale` to the app catalog so a bootstrapped server can join a tailnet and be reached by MagicDNS name instead of a public IP. Activation installs the package, enables `tailscaled`, and opens UDP 41641 — but deliberately stops short of authenticating. The operator finishes setup by running `sudo tailscale up --ssh` themselves.
 
-Other apps keep their current exposure. This does not change how PostgreSQL, Redis, or nginx are reached, and does not use `tailscale serve`, exit nodes, or subnet routing.
+Once the node is on the tailnet with Tailscale SSH enabled, `aparece test tailscale` offers to close public SSH. The offer is gated on proof that the current session is already reaching the box over the tailnet, so accepting it cannot sever the connection running it.
 
 ### Why install-only
 
 `tailscale up` blocks waiting for the operator to visit a login URL, and Ansible buffers command output until a task completes — so running it inside the role would hang with no URL on screen. Working around that means launching it async, polling `tailscale status --json` for the `AuthURL`, printing it, then waiting for `BackendState=Running` with a timeout. Install-only trades one manual command for none of that machinery.
 
 Authentication is interactive by design. No auth keys are passed through the CLI, stored on disk, or read from the environment, so activation handles no secrets.
+
+## Security Model Consequence
+
+Installing Tailscale changes the exposure of *every* service on the host, whether or not this spec touches them.
+
+tailscaled inserts a `ts-input` chain at the top of iptables' `INPUT` chain containing a blanket ACCEPT for the `tailscale0` interface. That rule is evaluated ahead of UFW's. Two consequences follow, and both matter:
+
+1. **UFW does not gate tailnet traffic.** Any service listening on `0.0.0.0` becomes reachable from the tailnet at `100.x.y.z:<port>` regardless of UFW rules. PostgreSQL and Redis both enforce authentication (see the smoke tests spec), so this is authenticated, tailnet-only reachability rather than public exposure — but it is a real widening of the reachable surface and should not be discovered by accident.
+2. **Closing port 22 does not break SSH over the tailnet.** This is what makes the lockdown safe, and it is the mechanism Tailscale's own Ubuntu guide relies on.
+
+Anything that must stay off the tailnet has to bind to `127.0.0.1` rather than rely on the firewall.
 
 ## File Structure
 
@@ -24,6 +35,7 @@ ansible/
   roles/tailscale/tasks/main.yml
   app_metadata/tailscale.yml
   tests/tailscale.sh
+  lib/secure-ssh.sh
 ```
 
 Modified:
@@ -98,10 +110,19 @@ log_paths: []
 notes: |
   Not connected to a tailnet yet. Finish setup with:
 
-    sudo tailscale up
+    sudo tailscale up --ssh
+
+  The --ssh flag enables Tailscale SSH, which is required before aparece will
+  offer to close public SSH.
 
   Then reach this host by its MagicDNS name from any tailnet device.
   Connection persists across reboots — no need to run 'up' again.
+
+  Once connected over the tailnet, run:
+
+    sudo aparece test tailscale
+
+  to verify the connection and be offered the public-SSH lockdown.
 
   Recommended for servers: disable key expiry for this machine in the
   Tailscale admin console, otherwise it drops off the tailnet in 180 days
@@ -119,7 +140,7 @@ UDP 41641 is opened by the existing `post_tasks` loop in `activate.yml`; the rol
 `tailscale up` writes the node key and preferences to `/var/lib/tailscale/tailscaled.state`. On boot, tailscaled reads that state and reconnects without intervention — hence the reassurance in `notes`. Two consequences worth recording:
 
 - `tailscale down` persists the same way. A downed node stays down across reboots until `up` is run again.
-- Node keys expire after 180 days by default, dropping the node off the tailnet and requiring interactive re-auth. For an unattended server that is precisely the wrong failure mode, so `notes` points at the admin console toggle while the operator is already there finishing the login.
+- Node keys expire after 180 days by default, dropping the node off the tailnet and requiring interactive re-auth. For an unattended server that is precisely the wrong failure mode, so `notes` points at the admin console toggle while the operator is already there finishing the login. **This matters more once public SSH is closed:** an expired node key removes the only remaining path in.
 
 ## Remote CLI Changes (`templates/aparece-remote.sh`)
 
@@ -135,6 +156,8 @@ Placed **after** the `cmd_test "$app"` call so the instruction is the last thing
 No change to `parse_meta`. Its scalar branch (`print(val)`) passes a multi-line block scalar through unchanged.
 
 The field is generic and optional. Apps without it are unaffected, and others may adopt it later.
+
+**No other CLI changes.** The lockdown prompt deliberately does not live in `cmd_test`, which is app-agnostic. It lives in the tailscale test script, which is already app-specific.
 
 ## Smoke Test (`ansible/tests/tailscale.sh`)
 
@@ -163,9 +186,16 @@ Output is captured regardless of exit code, because `tailscale status` exits non
 
 The value of `BackendState` is printed for information:
 - `Running` → print the tailnet IPv4 from `TailscaleIPs[0]`
-- anything else (`NeedsLogin`, `Stopped`, `Starting`, `NoState`) → print a reminder to run `sudo tailscale up`
+- anything else (`NeedsLogin`, `Stopped`, `Starting`, `NoState`) → print a reminder to run `sudo tailscale up --ssh`
 
 Neither outcome fails the test. A freshly activated node reports `NeedsLogin`, which is the expected end state of activation.
+
+**Lockdown offer — after all checks:**
+```bash
+bash "$(dirname "$0")/../lib/secure-ssh.sh" || true
+```
+
+The `|| true` is load-bearing. A non-zero exit from this script makes `cmd_test` stop `tailscaled` — a hiccup in the lockdown must never tear down the network the operator is connected through. The helper reports its own errors.
 
 Sample output immediately after activation:
 
@@ -175,10 +205,71 @@ Sample output immediately after activation:
   [PASS] tailscale binary responds (1.90.2)
   [PASS] tailscaled is active
   [PASS] Daemon socket responsive (state: NeedsLogin)
-         Not connected — run 'sudo tailscale up' to join a tailnet
+         Not connected — run 'sudo tailscale up --ssh' to join a tailnet
 
 [aparece] All smoke tests passed for tailscale.
 ```
+
+## SSH Lockdown (`ansible/lib/secure-ssh.sh`)
+
+### End state
+
+Public SSH is closed by deleting the UFW `22/tcp` rule. **sshd keeps running and stays enabled.** This leaves two independent ways in over the tailnet:
+
+1. Tailscale SSH, served by tailscaled
+2. Ordinary sshd, reached at the node's `100.x.y.z` address
+
+Both survive because `ts-input` accepts `tailscale0` traffic ahead of UFW. Keeping sshd means a tailnet ACL change that breaks Tailscale SSH does not lock the operator out — their existing keys still work. Both paths do depend on the tailnet itself, so an expired node key still ends in the cloud console.
+
+`ufw allow in on tailscale0` is deliberately **not** added. Tailscale's own `ts-input` rule already accepts everything on that interface ahead of UFW, so the rule would be decorative.
+
+### The gate
+
+Every condition must hold. On failure the helper prints one line explaining why and exits 0 without prompting — except for conditions 1 and 2, which exit silently, since a non-interactive run and an already-locked-down host are both normal states rather than something to report.
+
+1. **A TTY** — `[[ -t 0 ]]`, so non-interactive runs stay silent
+2. **A `22/tcp` allow rule exists in UFW** — otherwise already locked down; exit silently, no message
+3. **`RunSSH: true`** — parsed from `tailscale debug prefs`
+4. **`BackendState` is `Running`** — from `tailscale status --json`
+5. **The current session arrived over the tailnet**, determined by walking process ancestry from `$$` to PID 1 via `/proc/<pid>/stat` and comparing each ancestor's `comm`:
+   - ancestry contains `tailscaled` → Tailscale SSH session → pass
+   - ancestry contains `sshd` **and** `SSH_CONNECTION`'s source address is in `100.64.0.0/10` → sshd-over-tailnet → pass, with a printed warning that Tailscale SSH itself remains unproven
+   - otherwise → refuse, explaining that closing port 22 would cut the current connection
+
+Condition 5 is the substance of the verification. A status check can only report what the daemon believes; the session's own provenance is proof that the path being preserved actually carries traffic. Because the operator is connected through a path that survives the change, accepting the prompt cannot disconnect them.
+
+Ancestry walking is unaffected by `sudo`, which appears as a descendant of the login shell and does not truncate the chain.
+
+### The prompt
+
+On a passing gate, print the exact change and prompt with **N as the default**:
+
+```
+Tailscale SSH is working and this session is on the tailnet (100.x.y.z).
+
+  Public SSH can now be closed:
+    - DELETE ufw rule: 22/tcp ALLOW Anywhere (v4 and v6)
+    - sshd keeps running, reachable at 100.x.y.z
+    - Tailscale SSH is unaffected
+
+Close public SSH now? [y/N]
+```
+
+On `y`: run `ufw delete allow 22/tcp`, which removes both the v4 and v6 rules created by the security role. Then print `ufw status`, followed by:
+
+- the undo: `sudo ufw allow 22/tcp`
+- a note that the cloud provider's serial or web console is the out-of-band recovery path
+- **a reminder to confirm access from another device before ending this session**
+
+### Interaction with `activate`
+
+`cmd_activate` calls `cmd_test` at the end, so the helper runs during activation too. It cannot prompt there: a freshly activated node has not been through `tailscale up`, so `BackendState` is `NeedsLogin` and conditions 3–5 all fail. The prompt appears only on a deliberate `aparece test tailscale` from a tailnet session.
+
+The narrow exception is re-running `aparece activate tailscale` later, from a tailnet session, on a host that still has the port 22 rule. The prompt fires mid-activation. This is acceptable: it is interactive, defaults to N, and the gate conditions that make it safe are identical.
+
+### fail2ban
+
+Once public SSH is closed, fail2ban's sshd jail protects a port nothing can reach. It is already `state: stopped` in the security role (marked TODO), so no change is needed. Worth revisiting if that TODO is ever resolved.
 
 ## Documentation
 
@@ -188,24 +279,44 @@ Sample output immediately after activation:
 |-----|-------------|---------|---------|
 | tailscale | Tailscale mesh VPN | 41641/udp | tailscaled |
 
-and entries for `tailscale.yml` and `roles/tailscale/` in the project structure block.
+entries for `tailscale.yml`, `roles/tailscale/`, and `lib/secure-ssh.sh` in the project structure block, and a short subsection covering the lockdown flow and the fact that Tailscale bypasses UFW on `tailscale0`.
 
 ## Testing
 
-Per `AGENTS.md`, Ansible roles cannot be run or tested on macOS. Verification happens on an Ubuntu 24.04 target:
+Per `AGENTS.md`, Ansible roles cannot be run or tested on macOS. Verification happens on an Ubuntu 24.04 target.
 
-1. `sudo aparece activate tailscale` — installs cleanly, smoke tests pass, notes print last
+Installation:
+
+1. `sudo aparece activate tailscale` — installs cleanly, smoke tests pass, notes print last, **no lockdown prompt appears**
 2. `sudo aparece activate tailscale` again — idempotent, no changed tasks beyond apt cache
-3. `sudo tailscale up` — completes login, node appears in the admin console
-4. `sudo aparece test tailscale` — now reports `Running` with the tailnet IP
-5. `sudo ufw status` — shows `41641/udp ALLOW`
-6. Reboot — node rejoins the tailnet with no intervention
+3. `sudo tailscale up --ssh` — completes login, node appears in the admin console
+4. `sudo ufw status` — shows `41641/udp ALLOW`
+5. Reboot — node rejoins the tailnet with no intervention
+
+Gate behavior:
+
+6. From a **public-IP** SSH session: `sudo aparece test tailscale` reports `Running` with the tailnet IP and **refuses to prompt**, explaining the session is not on the tailnet
+7. From a **Tailscale SSH** session (`tailscale ssh <host>`): the prompt appears; answering `N` changes nothing
+8. From an **sshd-over-tailnet** session (`ssh 100.x.y.z`): the prompt appears with the Tailscale-SSH-unproven warning
+9. Piped input (`echo | sudo aparece test tailscale`): no prompt, no hang
+
+After lockdown:
+
+10. Answer `y` from a Tailscale SSH session — `ufw status` no longer lists `22/tcp`
+11. `ssh <public-ip>` from off-tailnet — times out
+12. `tailscale ssh <host>` — still works
+13. `ssh 100.x.y.z` — still works, confirming the sshd fallback
+14. Reboot — both tailnet paths return; public SSH stays closed
+15. `sudo aparece test tailscale` again — no prompt (no `22/tcp` rule to delete), tests still pass
+16. `sudo ufw allow 22/tcp` — the documented undo restores public SSH
 
 ## Scope Boundaries
 
 - No auth keys, OAuth clients, or unattended enrollment. Login is interactive.
 - No `tailscale serve` / `funnel`, exit-node configuration, subnet routing, or the IP forwarding sysctls those require.
-- No Tailscale SSH. The security role's port 22 rule already covers SSH over the tailnet.
-- No `ufw allow in on tailscale0`. Services keep their existing exposure; adding it would make every listening port tailnet-reachable, which is broader than this change intends.
+- The lockdown closes public SSH only. It does not touch the UFW rules for PostgreSQL, Redis, or nginx — though per the Security Model Consequence section, those services are tailnet-reachable regardless of UFW once Tailscale is installed.
+- sshd is never disabled, and its config is never modified. No `ListenAddress` binding to the tailnet IP: that address is assigned by Tailscale, and pinning it in `sshd_config` breaks sshd on any boot where it starts before `tailscale0` has an address.
+- No auto-revert timer. The session gate makes lockout unlikely enough that a background job silently reopening port 22 is the larger risk.
 - No changes to `bootstrap.yml`, the security role, or any other app's metadata.
 - `aparece status tailscale` reports `ACTIVE` whenever tailscaled is running, including when the node is logged out and connected to nothing. Accurate reporting needs per-app status hooks — a change to the shared metadata contract beyond this feature's scope. The smoke test is the place that reports real connection state.
+- `tailscale debug prefs` is a debug-namespaced command and its output is not a stability guarantee. If the `RunSSH` field moves, gate condition 3 fails closed — the prompt stops appearing, which is the safe direction.
