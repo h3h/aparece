@@ -1,0 +1,28 @@
+description: "Tailscale mesh VPN (WireGuard)"
+ufw_ports:
+  - { port: "41641", proto: "udp" }
+binary_path: "/usr/bin/tailscale"
+service_name: "tailscaled"
+log_paths: []
+notes: |
+  Not connected to a tailnet yet. Finish setup with:
+
+    sudo tailscale up --ssh
+
+  The --ssh flag enables Tailscale SSH, which is required before aparece will
+  offer to close public SSH.
+
+  Then reach this host by its MagicDNS name from any tailnet device.
+  Connection persists across reboots — no need to run 'up' again.
+
+  Once connected over the tailnet, run:
+
+    sudo aparece test tailscale
+
+  to verify the connection and be offered the public-SSH lockdown.
+
+  Recommended for servers: disable key expiry for this machine in the
+  Tailscale admin console, otherwise it drops off the tailnet in 180 days
+  and needs an interactive re-auth.
+
+  Logs: journalctl -u tailscaled

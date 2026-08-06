@@ -120,12 +120,13 @@ cmd_activate() {
     echo ""
 
     # Print summary
-    local ports binary service logs
+    local ports binary service logs notes
 
     ports="$(parse_meta "$meta" ufw_ports)"
     binary="$(parse_meta "$meta" binary_path)"
     service="$(parse_meta "$meta" service_name)"
     logs="$(parse_meta "$meta" log_paths)"
+    notes="$(parse_meta "$meta" notes)"
 
     echo "=== ${desc} ==="
     [[ -n "$ports" ]]   && echo "  Port(s): ${ports}"
@@ -135,6 +136,12 @@ cmd_activate() {
     echo ""
 
     cmd_test "$app"
+
+    # Optional free-form notes, printed last so they survive the test output
+    if [[ -n "$notes" ]]; then
+        echo ""
+        echo "$notes"
+    fi
 }
 
 cmd_status() {
