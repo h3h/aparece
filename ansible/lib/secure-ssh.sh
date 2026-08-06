@@ -195,12 +195,32 @@ read_proc_stat() {
     return 0
 }
 
+# Reads SSH_CONNECTION out of another process's environment. /proc/<pid>/environ
+# is NUL-separated and readable by root, which is what we run as.
+#
+# This exists because sudo's default env_reset drops SSH_* from our own
+# environment, and the documented flow is `sudo aparece test tailscale` from a
+# non-root user. Without this, the sshd-over-tailnet branch of gate 5 could
+# never pass in normal use.
+env_ssh_connection() {
+    local pid="$1" kv
+    [[ -r "/proc/${pid}/environ" ]] || return 1
+    while IFS= read -r -d '' kv; do
+        if [[ "$kv" == SSH_CONNECTION=* ]]; then
+            printf '%s' "${kv#SSH_CONNECTION=}"
+            return 0
+        fi
+    done < "/proc/${pid}/environ"
+    return 1
+}
+
 PROC_COMM=""
 PROC_PPID=""
 
 saw_tailscaled=0
 saw_sshd=0
 ancestry=""
+ancestor_pids=()
 
 walk_pid="$$"
 walk_iterations=0
@@ -209,6 +229,8 @@ while (( walk_pid > 1 && walk_iterations < 64 )); do
     walk_iterations=$(( walk_iterations + 1 ))
 
     read_proc_stat "$walk_pid" || break
+
+    ancestor_pids+=("$walk_pid")
 
     # Recorded for the refusal message only. Capped so the message stays one
     # readable line on a deep process tree.
@@ -247,8 +269,24 @@ fi
 # SSH_CONNECTION is "<client-ip> <client-port> <server-ip> <server-port>".
 # Field 1 is where the client came from; field 3 is the local address it
 # reached. Both matter — see below.
+#
+# Our own copy is usually missing: the documented invocation is
+# `sudo aparece test tailscale`, and sudo's default env_reset strips SSH_*.
+# Fall back to the environment of the nearest ancestor that still has it —
+# the pre-sudo login shell.
+ssh_conn_raw="${SSH_CONNECTION:-}"
+
+if [[ -z "$ssh_conn_raw" ]]; then
+    for ancestor_pid in "${ancestor_pids[@]}"; do
+        if ssh_conn_raw="$(env_ssh_connection "$ancestor_pid")" && [[ -n "$ssh_conn_raw" ]]; then
+            break
+        fi
+        ssh_conn_raw=""
+    done
+fi
+
 ssh_conn_fields=()
-read -r -a ssh_conn_fields <<<"${SSH_CONNECTION:-}" || true
+read -r -a ssh_conn_fields <<<"$ssh_conn_raw" || true
 ssh_source="${ssh_conn_fields[0]:-}"
 ssh_local="${ssh_conn_fields[2]:-}"
 

@@ -62,7 +62,7 @@ Installs from Tailscale's official APT repository, mirroring upstream's document
 
 - name: Add Tailscale APT repository
   get_url:
-    url: https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-list
+    url: https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list
     dest: /etc/apt/sources.list.d/tailscale.list
     owner: root
     group: root
@@ -249,6 +249,17 @@ Every condition must hold. On failure the helper prints one line explaining why 
 Condition 5 is the substance of the verification. A status check can only report what the daemon believes; the session's own provenance is proof that the path being preserved actually carries traffic. Because the operator is connected through a path that survives the change, accepting the prompt cannot disconnect them.
 
 Ancestry walking is unaffected by `sudo`, which appears as a descendant of the login shell and does not truncate the chain.
+
+**Why `tailscaled` appears in the ancestry.** Not because the incubator keeps that name — it usually doesn't. tailscaled spawns the SSH session as a direct child of itself (`newIncubatorCommand` re-execs the daemon binary with `be-child ssh`), but for an interactive session the incubator then `exec`s into `/usr/bin/login` (or `su` as a fallback), so its `comm` becomes `login`, not `tailscaled`. The match works because the **daemon itself** is always an ancestor:
+
+- interactive: `bash ← login ← tailscaled ← systemd`
+- non-TTY command: `cmd ← tailscaled (incubator) ← tailscaled ← systemd`
+
+The walk checks every ancestor, so all shapes match. A future refactor that inspects only the immediate parent, or that assumes the incubator is still named `tailscaled`, would break this.
+
+**`SSH_CONNECTION` must be recovered from an ancestor's environment.** The documented invocation is `sudo aparece test tailscale`, and sudo's default `env_reset` strips `SSH_*`. Reading only our own environment would leave the sshd-over-tailnet branch permanently unreachable in normal use. The gate therefore falls back to reading `/proc/<pid>/environ` (NUL-separated, root-readable) for each ancestor, taking the first `SSH_CONNECTION` it finds — the pre-`sudo` login shell's.
+
+**A note on what deleting the rule actually does.** UFW's `before.rules` accepts `RELATED,ESTABLISHED` ahead of user rules, so removing the `22/tcp` allow rule does not tear down connections that are already open — it only refuses new ones. This is a safety margin, not the safety argument: a wrong gate decision would still leave the operator unable to reconnect once the current session ends. The gate remains the mechanism that matters.
 
 ### The prompt
 

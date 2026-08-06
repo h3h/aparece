@@ -262,3 +262,73 @@ precedence here. After unlocking 1Password:
     git push -u origin h3h/tailscale
 
 (Optionally re-sign first; see the signing note above.)
+
+---
+
+## Review pass (Fable) — findings and resolutions
+
+**F1 — RESOLVED-WRONG, fatal. The repo-list URL in the role was a 404.** The
+spec (and therefore the role) used
+`https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-list`, a filename
+upstream has never served. Verified by curl:
+
+    noble.noarmor.gpg              HTTP 200
+    noble.tailscale-list           HTTP 404   <- what we shipped
+    noble.tailscale-keyring.list   HTTP 200   <- the real one
+
+As written, `aparece activate tailscale` would have failed at the second task on
+every host and installed nothing. This was invented during spec-writing, not
+transcribed from upstream, and no amount of shell testing would have caught it.
+Fixed in both the role and the spec.
+
+**F2 — RESOLVED-WRONG, feature-breaking. `sudo` strips `SSH_CONNECTION`.**
+Ubuntu's default sudoers uses `env_reset` and does not keep `SSH_*`. The
+documented flow is `sudo aparece test tailscale` from a non-root user, so the
+sshd-over-tailnet branch of gate 5 could never pass — it would always skip with
+"no usable SSH_CONNECTION". Half the design was silently inert; spec test
+scenario 8 would never have shown a prompt.
+
+Fixed: the gate now falls back to reading `/proc/<pid>/environ` for each
+ancestor and taking the first `SSH_CONNECTION` found (the pre-`sudo` login
+shell's). Verified in the harness: a `sudo` session descending from
+sshd-over-tailnet now reaches the prompt, while `sudo` from an sshd-over-public
+session is still refused.
+
+**F3 — L2's mechanism was wrong; the conclusion survives.** I recorded that the
+incubator has `comm` = `tailscaled`. It usually does not: for an interactive
+session the incubator `exec`s into `/usr/bin/login` (or `su`), so its comm
+changes. The gate works for a stronger reason — the tailscaled **daemon** is
+always an ancestor, since the incubator is spawned as its direct child. Real
+chains are `bash ← login ← tailscaled ← systemd` (interactive) and
+`cmd ← tailscaled ← tailscaled ← systemd` (non-TTY). H1 is therefore
+RESOLVED-CONFIRMED from source rather than merely plausible. Recorded in the
+spec so a future refactor doesn't narrow the walk to the immediate parent.
+
+**F4 — H2 resolved, and my worry was unfounded.** `RunSSH` is a bare `bool` in
+`ipn/prefs.go` with no `omitempty`, and `runPrefs` marshals the struct directly,
+so the field is always present as `true`/`false`. The absent-means-false
+handling stays as defensive coding for a debug-namespaced command.
+
+**F5 — H3, H4, H5, H7 all RESOLVED-CONFIRMED** against ufw and tailscale source:
+`ufw status` renders the security role's rule as `22/tcp` / `22/tcp (v6)` with a
+bare `ALLOW`, matching gate 2's regex; rule-syntax deletes never prompt (only
+numbered deletes, `reset`, and `enable`/`disable` do) and one
+`ufw delete allow 22/tcp` removes both address families; `tailscale version`
+line 1 is the bare version. H5's scoped-rule caveat holds and remains a
+cosmetic over-claim, never a lockout.
+
+**F6 — adversarial audit found no catastrophic path.** No scenario was
+constructed in which the prompt is offered to a session that deleting the rule
+would sever. Additionally noted: UFW's `before.rules` accepts
+`RELATED,ESTABLISHED` ahead of user rules, so deleting the allow rule never
+tears down a live TCP session — a safety margin above the gate, now recorded in
+the spec. It does not weaken the need for the gate, since the operator still
+could not reconnect.
+
+### Still open after review
+
+**H6 (partial) — the role has still never been run.** The 404 is fixed and the
+URL verified live, but no Ansible task in this feature has ever executed:
+idempotency, service enablement, UFW port opening, and reboot persistence are
+all unverified. The spec's 16 verification steps remain the outstanding work,
+and they need an Ubuntu 24.04 host.

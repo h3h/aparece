@@ -9,7 +9,7 @@
 
 - name: Add Tailscale APT repository
   get_url:
-    url: https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-list
+    url: https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list
     dest: /etc/apt/sources.list.d/tailscale.list
     owner: root
     group: root
