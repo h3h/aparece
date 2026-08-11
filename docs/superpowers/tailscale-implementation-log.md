@@ -409,3 +409,56 @@ refused every interactive Tailscale SSH session.
 Every doubt in the original handoff list is now closed. The remaining unexercised
 path is the lockdown apply itself (answering `y`), which has been simulated but
 never run on a real host.
+
+---
+
+## Lockdown exercised on friedrich — results and one design correction
+
+The operator answered `y` from a live Tailscale SSH session. Everything the
+design predicted held:
+
+- The gate took the **`tailscale-ssh`** branch: no sshd-over-tailnet warning was
+  printed, confirming the `tailscaled`-ancestry path was matched and the
+  `SSH_CONNECTION` checks were skipped as designed.
+- **H4 RESOLVED-CONFIRMED live.** One `ufw delete allow 22/tcp` removed both
+  address families in a single non-interactive call — "Rule deleted" /
+  "Rule deleted (v6)", no prompt.
+- `Self.DNSName` parsed correctly, trailing dot stripped: the reconnect hint
+  printed `tailscale ssh friedrich.taildc83c3.ts.net`. This was previously an
+  unverified assumption.
+- kamal-proxy's 80/443 rules and `41641/udp` were untouched.
+- The smoke test still exited 0, so tailscaled was not stopped.
+- Re-running `sudo aparece test tailscale` afterwards produces **no prompt** —
+  gate 2 finds no `22/tcp` rule and exits silently. Idempotent as specified.
+
+Independent confirmation from an off-host machine (`davis`, also on the tailnet):
+
+    46.225.146.87:22    -> Operation timed out   (public SSH closed)
+    46.225.146.87:443   -> OPEN                  (kamal-proxy unaffected)
+    100.115.173.2:22    -> OPEN                  (tailnet access preserved)
+
+**DESIGN CORRECTION — the "two independent paths" claim was wrong.** Connecting
+to the tailnet address with an ordinary SSH client reports an ancestry of
+`tailscaled ← tailscaled`, not `sshd`. While Tailscale SSH is enabled,
+**tailscaled owns port 22 on the tailnet address and shadows sshd.** The spec,
+README, and the prompt text all claimed sshd was simultaneously reachable at
+`100.x`; it is not.
+
+The fallback is real but **sequential**: sshd takes over that port only once
+Tailscale SSH is disabled (`tailscale set --ssh=false`). That is still a genuine
+recovery path from a broken SSH ACL — it just requires an action rather than
+being a second door already standing open. Corrected in all three places.
+
+A methodological note: the first "public SSH is closed" test appeared to succeed
+in reaching the host, which looked like the lockdown had failed. The cause was
+the `Host friedrich` ssh_config block rewriting `HostName` to the MagicDNS name,
+so the probe went over the tailnet. Testing reachability by hostname is
+meaningless once a config block redirects it — the public IP must be addressed
+directly.
+
+### Remaining unexercised
+
+The corrected prompt text has not been displayed on a real host: doing so would
+mean re-adding the `22/tcp` rule to trigger the gate again, which momentarily
+reopens public SSH on a host running kamal-proxy. Not done unilaterally. The
+text change is cosmetic and shellcheck-clean.

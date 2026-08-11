@@ -352,8 +352,10 @@ fi
 echo ""
 echo "  Public SSH can now be closed:"
 echo "    - DELETE ufw rule: 22/tcp ALLOW Anywhere (v4 and v6)"
-echo "    - sshd keeps running, reachable at ${ip_label}"
 echo "    - Tailscale SSH is unaffected"
+echo "    - sshd keeps running as a fallback: while Tailscale SSH is on it"
+echo "      serves ${ip_label}:22, so sshd takes over there only if you later"
+echo "      turn Tailscale SSH off ('tailscale set --ssh=false')"
 echo ""
 
 reply=""

@@ -220,12 +220,16 @@ Sample output immediately after activation:
 
 ### End state
 
-Public SSH is closed by deleting the UFW `22/tcp` rule. **sshd keeps running and stays enabled.** This leaves two independent ways in over the tailnet:
+Public SSH is closed by deleting the UFW `22/tcp` rule. **sshd keeps running and stays enabled**, as a fallback.
 
-1. Tailscale SSH, served by tailscaled
-2. Ordinary sshd, reached at the node's `100.x.y.z` address
+The fallback is sequential, not simultaneous — a point worth stating precisely, because the earlier draft of this spec got it wrong. While Tailscale SSH is enabled, **tailscaled owns port 22 on the tailnet address and shadows sshd**: connecting with an ordinary client to `100.x.y.z:22` is answered by tailscaled, not sshd. Verified on a live host, where `ssh h3h@100.115.173.2 'ps ...'` reports an ancestry of `tailscaled ← tailscaled`.
 
-Both survive because `ts-input` accepts `tailscale0` traffic ahead of UFW. Keeping sshd means a tailnet ACL change that breaks Tailscale SSH does not lock the operator out — their existing keys still work. Both paths do depend on the tailnet itself, so an expired node key still ends in the cloud console.
+So the two paths are:
+
+1. **Tailscale SSH**, served by tailscaled — the active path
+2. **Ordinary sshd**, which takes over the same port the moment Tailscale SSH is turned off (`tailscale set --ssh=false`) or tailscaled stops serving it
+
+Both survive the firewall change because `ts-input` accepts `tailscale0` traffic ahead of UFW. Keeping sshd means a tailnet ACL change that breaks Tailscale SSH is recoverable — disable Tailscale SSH and your existing keys work again — but it is a recovery step, not a second door standing open. Both paths depend on the tailnet, so an expired node key still ends in the cloud console.
 
 `ufw allow in on tailscale0` is deliberately **not** added. Tailscale's own `ts-input` rule already accepts everything on that interface ahead of UFW, so the rule would be decorative.
 

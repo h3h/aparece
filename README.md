@@ -99,8 +99,11 @@ Accepting it therefore cannot cut the connection running it. It defaults to no,
 and does not appear on a non-interactive run or on a host that has no `22/tcp`
 rule left to delete.
 
-sshd keeps running and stays enabled. After lockdown the host is still reachable
-at its `100.x` address by both Tailscale SSH and ordinary sshd. Confirm access
+sshd keeps running and stays enabled, as a fallback. Note that while Tailscale
+SSH is on, tailscaled owns port 22 on the tailnet address and shadows sshd — an
+ordinary `ssh 100.x.y.z` is answered by tailscaled too. sshd takes over that port
+only if you later turn Tailscale SSH off (`tailscale set --ssh=false`), which is
+the recovery path if a tailnet ACL change ever breaks Tailscale SSH. Confirm access
 from another device before ending the session; the cloud provider's serial or
 web console is the out-of-band recovery path. To undo:
 
