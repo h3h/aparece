@@ -386,3 +386,26 @@ SSH are the operator's decisions, and this host runs kamal-proxy on 80/443, so
 it is not a throwaway box.
 
 The lockdown itself has NOT been exercised on a real host.
+
+---
+
+## H1 RESOLVED — confirmed on a live Tailscale SSH session
+
+Run inside a real `tailscale ssh` session on friedrich:
+
+    $ ps -o comm= -p $(ps -o ppid= -p $PPID)
+    tailscaled
+
+The shell's **grandparent** is `tailscaled`, confirming both that the daemon
+appears in the ancestry and that Fable's correction (F3) was right: the
+immediate parent is the incubator after it `exec`s into `login`, and the
+process actually named `tailscaled` is the daemon one level further up. The
+chain is `bash ← login ← tailscaled`.
+
+This validates the design decision to walk the entire ancestry rather than
+inspect the immediate parent. A gate that checked only `$PPID` would have
+refused every interactive Tailscale SSH session.
+
+Every doubt in the original handoff list is now closed. The remaining unexercised
+path is the lockdown apply itself (answering `y`), which has been simulated but
+never run on a real host.
