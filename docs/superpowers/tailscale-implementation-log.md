@@ -332,3 +332,57 @@ URL verified live, but no Ansible task in this feature has ever executed:
 idempotency, service enablement, UFW port opening, and reboot persistence are
 all unverified. The spec's 16 verification steps remain the outstanding work,
 and they need an Ubuntu 24.04 host.
+
+---
+
+## Live verification on h3h@friedrich (Ubuntu 24.04.4 LTS, x86_64)
+
+First execution of any of this code against a real host. Target was already
+bootstrapped; `ansible/` was rsynced to `/opt/aparece/ansible/` and the remote
+CLI reinstalled, without re-running the bootstrap playbook.
+
+**H6 — RESOLVED. The role works and is idempotent.** First run: `ok=11
+changed=4`, installing Tailscale 1.102.2. Second run: `ok=11 changed=0`. The
+corrected repo URL fetched successfully — this is the run that would have failed
+outright before the F1 fix.
+
+**H7 — RESOLVED-CONFIRMED live.** `tailscale version` line 1 is the bare
+version; the role reported "Tailscale installed: 1.102.2" and the smoke test
+printed `(1.102.2)`.
+
+**L9 / spec correction — RESOLVED-CONFIRMED live.** On a logged-out node,
+`tailscale status --json` exits **0** and returns JSON with
+`BackendState: NeedsLogin`. The smoke test passes on a not-yet-connected node
+exactly as designed, so activation does not stop tailscaled.
+
+**H2 — RESOLVED-CONFIRMED live.** `tailscale debug prefs` emits `"RunSSH":
+false` — present, not omitted, on a node that has never enabled SSH. Fable's
+reading of `ipn/prefs.go` was right and my L4 worry was unfounded. The
+absent-means-false handling stays as harmless defensive coding.
+
+**H3 — RESOLVED-CONFIRMED live.** Real `ufw status` on this host renders
+`22/tcp ... ALLOW ... Anywhere` and `22/tcp (v6) ... ALLOW ... Anywhere (v6)`.
+Gate 2 matched: the gate proceeded past rule detection and stopped at gate 3
+(`RunSSH` false), which is the correct refusal for a node that is not yet
+connected.
+
+**L3 — RESOLVED.** This host runs OpenSSH_9.6p1, so the per-session process is
+named `sshd`, not `sshd-session`. The gate's acceptance of both remains useful
+future-proofing.
+
+**L6 — RESOLVED-CONFIRMED live.** `sudo aparece activate tmux` (an app with no
+`notes` field) exits 0. The `if`-block fix holds in production; the spec's
+original `&&` one-liner would have made this exit 1.
+
+**UFW port** — `41641/udp` and `41641/udp (v6)` are open, added by the existing
+`activate.yml` post_task loop.
+
+### Still open
+
+**H1 — the process-ancestry assumption remains unverified.** It requires an
+actual Tailscale SSH session, which requires `sudo tailscale up --ssh` and an
+interactive browser login. Not performed: joining a tailnet and closing public
+SSH are the operator's decisions, and this host runs kamal-proxy on 80/443, so
+it is not a throwaway box.
+
+The lockdown itself has NOT been exercised on a real host.
