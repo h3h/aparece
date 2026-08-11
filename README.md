@@ -76,6 +76,57 @@ summary with the port, binary path, service name, and log locations.
 | nginx | Nginx web server | 80, 443 | nginx |
 | tmux | tmux terminal multiplexer | — | — |
 | chromium | Headless Chromium (Google Chrome stable) | — | — |
+| tailscale | Tailscale mesh VPN | 41641/udp | tailscaled |
+
+## Tailscale and SSH Lockdown
+
+Activating `tailscale` installs the package, enables `tailscaled`, and opens
+UDP 41641. It does not authenticate — login is interactive, so no auth keys are
+passed through the CLI or stored on disk. Finish setup yourself:
+
+```bash
+sudo tailscale up --ssh
+```
+
+The `--ssh` flag enables Tailscale SSH, which is required before aparece will
+offer the lockdown. Once the node is on the tailnet, running
+`sudo aparece test tailscale` from a tailnet session offers to close public SSH
+by deleting the UFW `22/tcp` rule.
+
+The offer is gated on the current session already arriving over the tailnet —
+either a Tailscale SSH session, or ordinary sshd reached at the `100.x` address.
+Accepting it therefore cannot cut the connection running it. It defaults to no,
+and does not appear on a non-interactive run or on a host that has no `22/tcp`
+rule left to delete.
+
+sshd keeps running and stays enabled, as a fallback. Note that while Tailscale
+SSH is on, tailscaled owns port 22 on the tailnet address and shadows sshd — an
+ordinary `ssh 100.x.y.z` is answered by tailscaled too. sshd takes over that port
+only if you later turn Tailscale SSH off (`tailscale set --ssh=false`), which is
+the recovery path if a tailnet ACL change ever breaks Tailscale SSH. Confirm access
+from another device before ending the session; the cloud provider's serial or
+web console is the out-of-band recovery path. To undo:
+
+```bash
+sudo ufw allow 22/tcp
+```
+
+Node keys expire after 180 days by default, which drops the host off the tailnet
+and requires an interactive re-auth. Disable key expiry for the machine in the
+Tailscale admin console — once public SSH is closed, the tailnet is the only way
+in.
+
+### UFW does not gate tailnet traffic
+
+tailscaled inserts a `ts-input` iptables chain ahead of UFW's rules, containing a
+blanket accept for the `tailscale0` interface. Every service listening on
+`0.0.0.0` is therefore reachable from the tailnet at `100.x.y.z:<port>`
+regardless of UFW rules — PostgreSQL, Redis, and nginx included. This is also
+what keeps SSH working after port 22 is closed.
+
+Installing Tailscale widens the reachable surface of the whole host, not just the
+services aparece opens ports for. Bind anything that must stay off the tailnet to
+`127.0.0.1`; the firewall will not do it.
 
 ## Requirements
 
@@ -112,7 +163,14 @@ aparece/
     │   ├── awscli.yml
     │   ├── nginx.yml
     │   ├── tmux.yml
-    │   └── chromium.yml
+    │   ├── chromium.yml
+    │   └── tailscale.yml
+    ├── lib/
+    │   └── secure-ssh.sh           # Gated public-SSH lockdown helper
+    ├── tests/                      # Per-app smoke tests
+    │   ├── postgresql.sh
+    │   ├── redis.sh
+    │   └── tailscale.sh
     └── roles/
         ├── base/                   # Essential packages, locale
         ├── security/               # SSH, UFW, fail2ban, sysctl
@@ -124,5 +182,6 @@ aparece/
         ├── awscli/
         ├── nginx/
         ├── tmux/
-        └── chromium/
+        ├── chromium/
+        └── tailscale/
 ```

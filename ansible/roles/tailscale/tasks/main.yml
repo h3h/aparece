@@ -1,0 +1,38 @@
+---
+- name: Add Tailscale APT signing key
+  get_url:
+    url: https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg
+    dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add Tailscale APT repository
+  get_url:
+    url: https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list
+    dest: /etc/apt/sources.list.d/tailscale.list
+    owner: root
+    group: root
+    mode: "0644"
+  register: tailscale_repo
+
+- name: Install Tailscale
+  apt:
+    name: tailscale
+    state: present
+    update_cache: yes
+
+- name: Enable and start tailscaled
+  systemd:
+    name: tailscaled
+    enabled: yes
+    state: started
+
+- name: Verify Tailscale installation
+  command: tailscale version
+  register: tailscale_installed_version
+  changed_when: false
+
+- name: Display Tailscale version
+  debug:
+    msg: "Tailscale installed: {{ tailscale_installed_version.stdout_lines[0] }}"
